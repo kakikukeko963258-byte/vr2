@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>VR Cinema YouTube</title>
+    <meta name="description" content="iPhoneとVRキットで楽しむ大画面YouTubeシアター">
+    
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="css/style.css">
+    
+    <!-- Three.js import map -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <!-- 縦向き警告オーバーレイ -->
+    <div id="orientation-warning" class="screen-overlay">
+        <div class="warning-box">
+            <div class="phone-icon-anim">📱 🔄</div>
+            <h2>画面を横向きにしてください</h2>
+            <p>VRモードを楽しむには、デバイスの画面回転ロックを解除し、横向き（ランドスケープ）にしてください。</p>
+        </div>
+    </div>
+
+    <!-- セットアップ画面（初期画面） -->
+    <div id="setup-screen" class="active">
+        <div class="curtain-bg"></div>
+        <div class="setup-container">
+            <header>
+                <div class="logo">VR CINEMA</div>
+                <p>仮想3D空間の大画面シアターでYouTube動画を体験</p>
+            </header>
+            
+            <main>
+                <!-- URL入力フォーム -->
+                <section class="input-section">
+                    <div class="search-box">
+                        <input type="text" id="youtube-input" placeholder="YouTube動画のURL または キーワードを入力...">
+                        <button id="search-btn" class="glow-btn">検索 / 読込</button>
+                    </div>
+                    
+                    <div class="quick-links">
+                        <span class="label">クイック再生:</span>
+                        <button class="chip" data-id="jNQXAC9IVRw">シアター紹介</button>
+                        <button class="chip" data-id="5qap5aO4i9A">Lofi Music</button>
+                        <button class="chip" data-id="Z3w5H8oTj0U">宇宙の旅</button>
+                    </div>
+                </section>
+                
+                <!-- 検索結果エリア -->
+                <section id="search-results-section" class="search-results-section hidden">
+                    <h3>検索結果</h3>
+                    <div id="search-results-grid" class="search-results-grid">
+                        <!-- 動的に挿入 -->
+                    </div>
+                </section>
+                
+                <!-- シアター設定 -->
+                <section class="options-section">
+                    <button id="enter-theater-btn" class="glow-btn start-btn disabled" disabled>
+                        <span>🎬 シアターに入る</span>
+                    </button>
+                </section>
+            </main>
+            
+            <footer>
+                <p>&copy; 2026 Antigravity VR Cinema. Made for iPhone & VR Headset.</p>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ローディング画面 -->
+    <div id="loading-screen" class="screen-overlay">
+        <div class="loader-box">
+            <div class="spinner"></div>
+            <h2>3Dシアターを準備中...</h2>
+            <p id="loading-status">YouTubeプレイヤーを読み込んでいます...</p>
+        </div>
+    </div>
+
+    <!-- シアター画面 -->
+    <div id="theater-screen">
+        <!-- YouTube iframe コンテナ -->
+        <!-- 通常モード用 -->
+        <div id="yt-normal-container" class="yt-container">
+            <div id="yt-normal"></div>
+        </div>
+        
+        <!-- ステレオ（VR）モード用 -->
+        <div id="yt-stereo-container" class="yt-container hidden">
+            <!-- 左目用 -->
+            <div id="yt-left-viewport" class="viewport-half">
+                <div id="yt-left" class="yt-iframe-wrapper"></div>
+            </div>
+            <!-- 右目用 -->
+            <div id="yt-right-viewport" class="viewport-half">
+                <div id="yt-right" class="yt-iframe-wrapper"></div>
+            </div>
+        </div>
+
+        <!-- Three.js描画用キャンバス -->
+        <canvas id="three-canvas"></canvas>
+
+        <!-- VR 2画面用の鼻パーツ遮蔽オーバーレイ（没入感向上用） -->
+        <div id="nose-bridge" class="hidden"></div>
+        <div id="vr-divider" class="hidden"></div>
+
+        <!-- VR Gaze Cursor (SVG Reticle) -->
+        <div id="gaze-cursor-container" class="hidden">
+            <div class="gaze-half left">
+                <svg class="reticle" viewBox="0 0 100 100">
+                    <circle class="reticle-bg" cx="50" cy="50" r="40"></circle>
+                    <circle class="reticle-progress" cx="50" cy="50" r="40"></circle>
+                    <circle class="reticle-dot" cx="50" cy="50" r="4"></circle>
+                </svg>
+            </div>
+            <div class="gaze-half right">
+                <svg class="reticle" viewBox="0 0 100 100">
+                    <circle class="reticle-bg" cx="50" cy="50" r="40"></circle>
+                    <circle class="reticle-progress" cx="50" cy="50" r="40"></circle>
+                    <circle class="reticle-dot" cx="50" cy="50" r="4"></circle>
+                </svg>
+            </div>
+        </div>
+
+        <!-- 2D HUD コントロール（画面右端のスライダー・ボタン） -->
+        <!-- 非VR時およびVR時の調整用。VR時も右端に表示（ステレオ時は右目の右端） -->
+        <div id="hud-panel" class="hud-panel collapsed">
+            <button id="hud-toggle-btn" class="hud-toggle">⚙️</button>
+            <div class="hud-content">
+                <h3>シアター設定</h3>
+                
+                <div class="hud-group">
+                    <label for="slider-ipd">左右間隔 (IPD): <span id="val-ipd">64</span>mm</label>
+                    <input type="range" id="slider-ipd" min="50" max="80" step="0.5" value="64">
+                </div>
+
+                <div class="hud-group">
+                    <label for="slider-size">画面サイズ: <span id="val-size">8.0</span>m</label>
+                    <input type="range" id="slider-size" min="4.0" max="16.0" step="0.5" value="8.0">
+                </div>
+
+                <div class="hud-group">
+                    <label for="slider-dist">画面の距離: <span id="val-dist">12.0</span>m</label>
+                    <input type="range" id="slider-dist" min="5.0" max="25.0" step="0.5" value="12.0">
+                </div>
+
+                <div class="hud-group">
+                    <label for="slider-ambient">劇場の明るさ: <span id="val-ambient">0.1</span></label>
+                    <input type="range" id="slider-ambient" min="0.0" max="0.5" step="0.05" value="0.1">
+                </div>
+                
+                <div class="hud-buttons">
+                    <button id="btn-recenter" class="hud-btn">🎯 センタリング</button>
+                    <button id="btn-vr-toggle" class="hud-btn primary">🕶️ VRモード切替</button>
+                    <button id="btn-exit" class="hud-btn danger">🚪 シアター退場</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- YouTube IFrame API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+    
+    <!-- アプリケーションモジュール -->
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

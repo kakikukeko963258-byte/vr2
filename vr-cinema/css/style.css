@@ -1,0 +1,773 @@
+/* ==========================================================================
+   VR Cinema YouTube CSS
+   ========================================================================== */
+
+/* 変数定義（デザインシステム） */
+:root {
+    --bg-dark: #0a0a0c;
+    --bg-card: rgba(20, 20, 25, 0.7);
+    --primary: #d4af37; /* ゴールド */
+    --primary-glow: rgba(212, 175, 55, 0.4);
+    --secondary: #8b0000; /* クリムゾンレッド */
+    --secondary-glow: rgba(139, 0, 0, 0.5);
+    --text-color: #f0f0f5;
+    --text-muted: #a0a0ab;
+    --border-color: rgba(212, 175, 55, 0.2);
+    --glass-bg: rgba(15, 15, 20, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --font-sans: 'Outfit', 'Noto Sans JP', sans-serif;
+    --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* 共通リセット & 基本スタイル */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--bg-dark);
+    font-family: var(--font-sans);
+    color: var(--text-color);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    touch-action: none; /* ダブルタップズームなどを無効化 */
+}
+
+/* 画面オーバーレイ共通 */
+.screen-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(5, 5, 8, 0.95);
+    backdrop-filter: blur(10px);
+    transition: opacity 0.5s ease, visibility 0.5s;
+    opacity: 0;
+    visibility: hidden;
+}
+
+.screen-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* 縦向き警告画面 */
+#orientation-warning {
+    z-index: 2000;
+    background: radial-gradient(circle at center, #1a0808 0%, #050202 100%);
+    display: none; /* JSで動的に表示 */
+}
+
+#orientation-warning .warning-box {
+    text-align: center;
+    padding: 2.5rem;
+    max-width: 90%;
+    background: rgba(20, 10, 10, 0.6);
+    border: 1px solid var(--secondary);
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 40px var(--secondary-glow);
+}
+
+.phone-icon-anim {
+    font-size: 4rem;
+    margin-bottom: 1.5rem;
+    animation: rotatePhone 2s ease-in-out infinite;
+}
+
+@keyframes rotatePhone {
+    0% { transform: rotate(0deg); }
+    50% { transform: rotate(-90deg); }
+    100% { transform: rotate(0deg); }
+}
+
+#orientation-warning h2 {
+    font-size: 1.8rem;
+    margin-bottom: 1rem;
+    color: var(--text-color);
+    letter-spacing: 1px;
+}
+
+#orientation-warning p {
+    color: var(--text-muted);
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+/* セットアップ画面 */
+#setup-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.5s ease;
+}
+
+#setup-screen.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.curtain-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: 
+        radial-gradient(circle at 20% 30%, rgba(139, 0, 0, 0.4) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(20, 10, 30, 0.8) 0%, transparent 60%),
+        var(--bg-dark);
+    z-index: 1;
+}
+
+/* カーテンのようなひだを表現する擬似要素 */
+.curtain-bg::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: repeating-linear-gradient(
+        90deg,
+        rgba(0, 0, 0, 0) 0px,
+        rgba(0, 0, 0, 0.2) 20px,
+        rgba(0, 0, 0, 0.4) 40px,
+        rgba(0, 0, 0, 0.2) 60px,
+        rgba(0, 0, 0, 0) 80px
+    );
+    opacity: 0.3;
+}
+
+.setup-container {
+    position: relative;
+    z-index: 2;
+    width: 90%;
+    max-width: 700px;
+    max-height: 90%;
+    overflow-y: auto;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    padding: 2.5rem;
+    box-shadow: 
+        0 20px 50px rgba(0,0,0,0.6), 
+        inset 0 1px 0 rgba(255,255,255,0.1);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+.setup-container::-webkit-scrollbar {
+    width: 6px;
+}
+.setup-container::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 3px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.logo {
+    font-size: 2.8rem;
+    font-weight: 800;
+    letter-spacing: 4px;
+    background: linear-gradient(135deg, #fff 0%, var(--primary) 50%, #8b6508 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 4px 12px rgba(212, 175, 55, 0.15);
+    margin-bottom: 0.5rem;
+    animation: pulseGlow 3s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+    0%, 100% { filter: drop-shadow(0 0 2px rgba(212, 175, 55, 0.2)); }
+    50% { filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.6)); }
+}
+
+header p {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-weight: 300;
+    letter-spacing: 0.5px;
+}
+
+/* 入力エリア */
+.input-section {
+    margin-bottom: 2rem;
+}
+
+.search-box {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 1rem;
+}
+
+#youtube-input {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    color: #fff;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    outline: none;
+    transition: var(--transition);
+}
+
+#youtube-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+}
+
+.glow-btn {
+    background: linear-gradient(135deg, var(--primary) 0%, #b8972f 100%);
+    border: none;
+    border-radius: 12px;
+    color: #000;
+    font-weight: 700;
+    padding: 1rem 1.8rem;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.glow-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px var(--primary-glow);
+}
+
+.glow-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.glow-btn:disabled {
+    background: #3a3a40;
+    color: #707075;
+    cursor: not-allowed;
+}
+
+.quick-links {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 0.85rem;
+}
+
+.quick-links .label {
+    color: var(--text-muted);
+}
+
+.chip {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-color);
+    padding: 5px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    transition: var(--transition);
+}
+
+.chip:hover {
+    background: rgba(212, 175, 55, 0.15);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* 検索結果 */
+.search-results-section {
+    margin-bottom: 2rem;
+    max-height: 250px;
+    overflow-y: auto;
+    padding-right: 5px;
+    transition: var(--transition);
+}
+
+.search-results-section.hidden {
+    display: none;
+}
+
+.search-results-section h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.8rem;
+    color: var(--primary);
+    border-left: 3px solid var(--primary);
+    padding-left: 8px;
+}
+
+.search-results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.result-card {
+    display: flex;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.result-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(212, 175, 55, 0.3);
+    transform: translateX(3px);
+}
+
+.result-card.selected {
+    background: rgba(212, 175, 55, 0.1);
+    border-color: var(--primary);
+}
+
+.result-card img {
+    width: 120px;
+    height: 90px;
+    object-fit: cover;
+}
+
+.card-info {
+    flex: 1;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-width: 0; /* 折り返しを有効化 */
+}
+
+.card-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    color: #fff;
+    margin-bottom: 4px;
+}
+
+.card-channel {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-meta {
+    font-size: 0.7rem;
+    color: #707075;
+}
+
+/* シアターに入るボタン */
+.options-section {
+    display: flex;
+    justify-content: center;
+    margin-top: 1rem;
+}
+
+.start-btn {
+    width: 100%;
+    max-width: 320px;
+    padding: 1.2rem;
+    font-size: 1.2rem;
+    letter-spacing: 1px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, var(--secondary) 0%, #cc0000 100%);
+    color: #fff;
+    box-shadow: 0 10px 25px var(--secondary-glow);
+}
+
+.start-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #a50000 0%, #e60000 100%);
+    box-shadow: 0 12px 30px rgba(230, 0, 0, 0.4);
+    transform: translateY(-3px);
+}
+
+/* ローディング画面 */
+#loading-screen {
+    z-index: 900;
+}
+
+.loader-box {
+    text-align: center;
+}
+
+.spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid rgba(212, 175, 55, 0.1);
+    border-top: 4px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1.5rem;
+    box-shadow: 0 0 15px var(--primary-glow);
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loader-box h2 {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.loader-box p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* ==========================================================================
+   シアター画面 (Three.js & YouTube Layer)
+   ========================================================================== */
+
+#theater-screen {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: none; /* JSでアクティブ化 */
+}
+
+/* Three.js キャンバス (最前面で描画、背景透過でiframeを後ろに見せる) */
+#three-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 23; /* iframeより上 */
+    pointer-events: none; /* マウスイベントを貫通させて背面やHUDを操作可能にする */
+}
+
+/* YouTube IFrame 用コンテナ */
+.yt-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 20; /* Three.jsキャンバスの下 */
+    background-color: #000;
+    overflow: hidden;
+    pointer-events: auto;
+}
+
+/* 通常モード: 単一の iframe */
+#yt-normal {
+    position: absolute;
+    /* CSS3Dプロジェクションにより、位置とサイズはJSからインラインで上書きされます */
+    border: none;
+    transform-origin: top left;
+}
+
+/* ステレオ（左右）モード */
+#yt-stereo-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+}
+
+.viewport-half {
+    position: relative;
+    width: 50%;
+    height: 100%;
+    overflow: hidden;
+}
+
+#yt-left-viewport {
+    border-right: 1px solid #000;
+}
+
+.yt-iframe-wrapper {
+    position: absolute;
+    border: none;
+    transform-origin: top left;
+}
+
+/* VR用の境界線 */
+#vr-divider {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 100%;
+    background-color: #000;
+    z-index: 35;
+}
+
+/* VR用の鼻パーツ遮蔽（左右の視野混同を防ぐ） */
+#nose-bridge {
+    position: absolute;
+    top: 0;
+    left: 48%;
+    width: 4%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 50%, rgba(0,0,0,1) 100%);
+    z-index: 36;
+    pointer-events: none;
+}
+
+/* ==========================================================================
+   VR Gaze Cursor (レティクル)
+   ========================================================================== */
+
+#gaze-cursor-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 40;
+    pointer-events: none;
+    display: flex;
+}
+
+.gaze-half {
+    width: 50%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.reticle {
+    width: 40px;
+    height: 40px;
+    transform: rotate(-90deg); /* アニメーション開始位置を上にする */
+}
+
+.reticle-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.3);
+    stroke-width: 4;
+}
+
+.reticle-progress {
+    fill: none;
+    stroke: var(--primary);
+    stroke-width: 4;
+    stroke-dasharray: 251.2; /* 2 * PI * r (r=40) */
+    stroke-dashoffset: 251.2;
+    transition: stroke-dashoffset 0.1s linear;
+}
+
+.reticle-dot {
+    fill: #fff;
+    stroke: rgba(0, 0, 0, 0.5);
+    stroke-width: 1;
+}
+
+/* レティクルアクティブ状態 */
+.reticle.active .reticle-progress {
+    /* JSでプログラムからdashoffsetを直接制御します */
+}
+
+/* ==========================================================================
+   2D HUD コントロールパネル（画面右端）
+   ========================================================================== */
+
+.hud-panel {
+    position: absolute;
+    top: 10%;
+    right: 0;
+    height: 80%;
+    width: 280px;
+    background: rgba(10, 10, 15, 0.85);
+    border-left: 2px solid var(--primary);
+    border-top: 1px solid var(--glass-border);
+    border-bottom: 1px solid var(--glass-border);
+    border-top-left-radius: 16px;
+    border-bottom-left-radius: 16px;
+    z-index: 50; /* キャンバスより上 */
+    transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: -5px 0 25px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+}
+
+.hud-panel.collapsed {
+    transform: translateX(100%);
+}
+
+/* トグルボタン */
+.hud-toggle {
+    position: absolute;
+    left: -48px;
+    top: 20px;
+    width: 48px;
+    height: 48px;
+    background: rgba(10, 10, 15, 0.85);
+    border: 1px solid var(--glass-border);
+    border-right: none;
+    border-top-left-radius: 12px;
+    border-bottom-left-radius: 12px;
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: -5px 0 15px rgba(0, 0, 0, 0.3);
+    outline: none;
+}
+
+.hud-content {
+    width: 100%;
+    height: 100%;
+    padding: 1.5rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.hud-content::-webkit-scrollbar {
+    width: 4px;
+}
+.hud-content::-webkit-scrollbar-thumb {
+    background: rgba(212, 175, 55, 0.3);
+    border-radius: 2px;
+}
+
+.hud-content h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    color: var(--primary);
+    border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+    padding-bottom: 0.5rem;
+    letter-spacing: 1px;
+}
+
+.hud-group {
+    margin-bottom: 1.2rem;
+}
+
+.hud-group label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.hud-group label span {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+/* レンジスライダーのカスタマイズ */
+.hud-group input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    outline: none;
+}
+
+.hud-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    background: var(--primary);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 8px var(--primary-glow);
+    transition: transform 0.1s;
+}
+
+.hud-group input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.hud-buttons {
+    margin-top: auto; /* 下部に寄せる */
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 1rem;
+}
+
+.hud-btn {
+    width: 100%;
+    padding: 0.8rem;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.hud-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.hud-btn.primary {
+    background: linear-gradient(135deg, var(--primary) 0%, #b8972f 100%);
+    color: #000;
+    border: none;
+}
+
+.hud-btn.primary:hover {
+    box-shadow: 0 0 10px var(--primary-glow);
+    filter: brightness(1.1);
+}
+
+.hud-btn.danger {
+    background: rgba(139, 0, 0, 0.4);
+    border-color: var(--secondary);
+    color: #ff9999;
+}
+
+.hud-btn.danger:hover {
+    background: rgba(139, 0, 0, 0.7);
+}
+
+/* メディアクエリ（極小デバイス対策） */
+@media (max-height: 400px) {
+    .setup-container {
+        padding: 1.5rem;
+    }
+    .logo {
+        font-size: 2rem;
+    }
+    .hud-panel {
+        width: 240px;
+        height: 90%;
+        top: 5%;
+    }
+}
