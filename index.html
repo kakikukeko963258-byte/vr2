@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>360° Gyro HDRI Viewer</title>
+    <title>360° Gyro EXR Viewer</title>
     <style>
         body {
             margin: 0;
@@ -45,10 +45,6 @@
             cursor: pointer;
             box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4);
             margin-top: 20px;
-            -webkit-appearance: none;
-        }
-        .btn:active {
-            background: #0056b3;
         }
         #ui-panel {
             position: absolute;
@@ -59,7 +55,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 10px;
+            gap: 15px;
             width: 90%;
             max-width: 400px;
         }
@@ -80,6 +76,31 @@
         #file-input {
             display: none;
         }
+        .control-box {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 12px 20px;
+            border-radius: 20px;
+            box-sizing: border-box;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .control-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+        .control-row input {
+            width: 65%;
+            accent-color: #007aff;
+        }
         #status {
             color: rgba(255, 255, 255, 0.7);
             font-size: 13px;
@@ -87,31 +108,52 @@
             text-align: center;
         }
     </style>
-    <!-- Three.js (軽量なWebGLライブラリをCDN経由で読み込み) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- ESモジュールを古いブラウザ等でも安定動作させるための Shim -->
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+
+    <!-- 外部ライブラリのルート指定 (Import Map) -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
 </head>
 <body>
 
-    <!-- 起動画面（iOSのセキュリティ制限を解除するためのタップ対象） -->
     <div id="overlay">
-        <h2>360° Gyro Viewer</h2>
+        <h2>360° Gyro EXR Viewer</h2>
         <p>iPhoneのジャイロセンサーを利用して周囲を見渡せます。<br>アクセス権限を許可して開始してください。</p>
         <button class="btn" id="start-btn">ジャイロを許可して開始</button>
     </div>
 
-    <!-- 画像選択用のUI -->
     <div id="ui-panel" style="display: none;">
         <label class="file-label" for="file-input">
-            📸 パノラマ画像（HDRI）を選択
+            📸 .exr パノラマ画像を選択
         </label>
-        <input type="file" id="file-input" accept="image/*">
-        <div id="status">画像が未選択です。端末内の360度画像を選択してください。</div>
+        <input type="file" id="file-input" accept=".exr">
+        
+        <!-- HDRならではの明暗調整用UI -->
+        <div class="control-box">
+            <div class="control-row">
+                <label for="exposure">露出 (Brightness)</label>
+                <input type="range" id="exposure" min="0.1" max="4.0" step="0.1" value="1.0">
+            </div>
+        </div>
+        
+        <div id="status">.exrファイル（正距円筒図法）を選択してください。</div>
     </div>
 
     <div id="canvas-container"></div>
 
-    <script>
-        let scene, camera, renderer, sphereMaterial, sphere;
+    <script type="module">
+        import * as THREE from 'three';
+        import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
+
+        let scene, camera, renderer;
         let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
         let screenOrientation = 0;
         let isGyroEnabled = false;
@@ -121,31 +163,34 @@
         const uiPanel = document.getElementById('ui-panel');
         const fileInput = document.getElementById('file-input');
         const statusText = document.getElementById('status');
+        const exposureInput = document.getElementById('exposure');
 
-        // 3D空間の初期化
         function initThree() {
             const container = document.getElementById('canvas-container');
             
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            
+            // EXRの高輝度を綺麗に表現するためのトーンマッピング設定
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            
             container.appendChild(renderer.domElement);
-
-            // 内側を向いた球体（ここに360度パノラマを貼り付ける）
-            const geometry = new THREE.SphereGeometry(500, 60, 40);
-            geometry.scale(-1, 1, 1); // 反転させて内側を描画
-
-            // 初期状態のダミーマテリアル
-            sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x1c1c24 });
-            sphere = new THREE.Mesh(geometry, sphereMaterial);
-            scene.add(sphere);
 
             camera.position.set(0, 0, 0);
 
             window.addEventListener('resize', onWindowResize);
+            
+            // 露出スライダーの制御
+            exposureInput.addEventListener('input', (e) => {
+                renderer.toneMappingExposure = parseFloat(e.target.value);
+            });
+
             animate();
         }
 
@@ -155,11 +200,10 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // ジャイロの回転角度をThree.jsのカメラ（Quaternion）にシームレスに変換する
         const zee = new THREE.Vector3(0, 0, 1);
         const euler = new THREE.Euler();
         const q0 = new THREE.Quaternion();
-        const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // 基準軸を水平に補正 (-PI/2 around X)
+        const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
 
         function updateCameraOrientation() {
             if (!isGyroEnabled) return;
@@ -169,11 +213,10 @@
             const gamma = deviceOrientation.gamma ? THREE.MathUtils.degToRad(deviceOrientation.gamma) : 0;
             const orient = screenOrientation ? THREE.MathUtils.degToRad(screenOrientation) : 0;
 
-            // 回転順序を'YXZ'に固定し、スマホの傾きを空間にマッピング
             euler.set(beta, alpha, -gamma, 'YXZ');
             camera.quaternion.setFromEuler(euler);
-            camera.quaternion.multiply(q1); // 正面向きのフィッティング
-            camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient)); // 画面の縦横持ち変更に対応
+            camera.quaternion.multiply(q1);
+            camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient));
         }
 
         function animate() {
@@ -182,57 +225,66 @@
             renderer.render(scene, camera);
         }
 
-        // ユーザーがローカルの画像ファイルを選択した時の処理
+        // EXRファイルの読み込み・デコード処理
         fileInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
-            statusText.textContent = '読み込み中...';
-            const reader = new FileReader();
+            statusText.textContent = 'EXRデータをデコード中... (数秒かかります)';
             
-            reader.onload = function(event) {
-                const loader = new THREE.TextureLoader();
-                loader.load(event.target.result, function(texture) {
-                    texture.minFilter = THREE.LinearFilter;
-                    sphereMaterial.map = texture;
-                    sphereMaterial.color.setHex(0xffffff); // ダミーカラーの初期化
-                    sphereMaterial.needsUpdate = true;
-                    statusText.textContent = `表示中: ${file.name}`;
-                }, undefined, function() {
-                    statusText.textContent = 'エラー: 画像テクスチャの生成に失敗しました。';
-                });
-            };
+            // ファイルをメモリ内の仮想URLに紐付け
+            const objectURL = URL.createObjectURL(file);
             
-            reader.readAsDataURL(file);
+            const loader = new EXRLoader();
+            // モバイルのメモリ制限を考慮し、16bitハーフフロート形式で省メモリに展開
+            loader.setDataType(THREE.HalfFloatType); 
+            
+            loader.load(objectURL, function(texture) {
+                // 360度パノラマ（Equirectangular）用のアタッチメント設定
+                texture.mapping = THREE.EquirectangularReflectionMapping;
+                texture.minFilter = THREE.LinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                texture.needsUpdate = true;
+
+                // シーンの背景（スカイボックス）として適用（これで球体オブジェクトが不要に）
+                scene.background = texture;
+                
+                statusText.textContent = `表示中: ${file.name}`;
+                
+                // 読み込み完了後にオブジェクトURLを解放してメモリ漏れを防止
+                URL.revokeObjectURL(objectURL);
+            }, 
+            undefined, 
+            function(error) {
+                console.error(error);
+                statusText.textContent = 'エラー: EXRの解析に失敗しました。ファイル破損か非対応形式です。';
+                URL.revokeObjectURL(objectURL);
+            });
         });
 
         function updateScreenOrientation() {
             screenOrientation = window.orientation || 0;
         }
 
-        // ユーザー開始ボタンタップ時の権限要求
         startBtn.addEventListener('click', async () => {
             initThree();
 
-            // iOS 13+ 特有の DeviceOrientationEvent 権限要求
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
                     const permissionState = await DeviceOrientationEvent.requestPermission();
                     if (permissionState === 'granted') {
                         setupGyroListeners();
                     } else {
-                        alert('センサーへのアクセス権限が拒否されました。設定 ＞ Safari から権限をクリアしてください。');
+                        alert('センサーへのアクセス権限が拒否されました。');
                     }
                 } catch (error) {
                     console.error(error);
-                    alert('エラー: HTTPS接続が確立されていないか、未対応の環境です。');
+                    alert('エラー: HTTPS環境で実行してください。');
                 }
             } else {
-                // 通常のブラウザ（AndroidやPC等）
                 setupGyroListeners();
             }
 
-            // オーバーレイ画面をフェードアウト
             overlay.style.opacity = '0';
             setTimeout(() => {
                 overlay.style.display = 'none';
