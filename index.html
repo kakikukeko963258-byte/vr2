@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>360° Gyro EXR Viewer</title>
+    <title>360° VR Gyro EXR Viewer</title>
     <style>
         body {
             margin: 0;
@@ -11,10 +11,26 @@
             overflow: hidden;
             background-color: #000;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-user-select: none;
+            user-select: none;
         }
         #canvas-container {
             width: 100vw;
             height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        #center-line {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 1px;
+            height: 100vh;
+            background: rgba(255, 255, 255, 0.2);
+            z-index: 5;
+            pointer-events: none;
+            display: none;
         }
         #overlay {
             position: absolute;
@@ -48,16 +64,17 @@
         }
         #ui-panel {
             position: absolute;
-            bottom: 40px;
+            bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 10;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 15px;
+            gap: 12px;
             width: 90%;
-            max-width: 400px;
+            max-width: 360px;
+            transition: opacity 0.4s ease;
         }
         .file-label {
             background: rgba(255, 255, 255, 0.2);
@@ -65,10 +82,10 @@
             -webkit-backdrop-filter: blur(12px);
             color: white;
             border: 1px solid rgba(255, 255, 255, 0.3);
-            padding: 14px 24px;
+            padding: 12px 20px;
             border-radius: 30px;
             cursor: pointer;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 500;
             box-shadow: 0 4px 15px rgba(0,0,0,0.4);
             text-align: center;
@@ -78,41 +95,45 @@
         }
         .control-box {
             width: 100%;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(0, 0, 0, 0.75);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.15);
-            padding: 12px 20px;
+            padding: 14px 18px;
             border-radius: 20px;
             box-sizing: border-box;
             color: white;
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            gap: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
         .control-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            font-size: 14px;
+            font-size: 13px;
+        }
+        .control-row label {
+            font-weight: 500;
         }
         .control-row input {
-            width: 65%;
+            width: 60%;
             accent-color: #007aff;
         }
         #status {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 13px;
-            text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 12px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.9);
             text-align: center;
+            background: rgba(0,0,0,0.4);
+            padding: 4px 12px;
+            border-radius: 10px;
         }
     </style>
     
-    <!-- ESモジュールを古いブラウザ等でも安定動作させるための Shim -->
     <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
 
-    <!-- 外部ライブラリのルート指定 (Import Map) -->
     <script type="importmap">
       {
         "imports": {
@@ -125,26 +146,31 @@
 <body>
 
     <div id="overlay">
-        <h2>360° Gyro EXR Viewer</h2>
-        <p>iPhoneのジャイロセンサーを利用して周囲を見渡せます。<br>アクセス権限を許可して開始してください。</p>
-        <button class="btn" id="start-btn">ジャイロを許可して開始</button>
+        <h2>360° VR EXR Viewer</h2>
+        <p>iPhoneを横向きにしてVRゴーグルにセットしてください。<br>ジャイロセンサーの権限を許可して開始します。</p>
+        <button class="btn" id="start-btn">VRモードを開始</button>
     </div>
 
-    <div id="ui-panel" style="display: none;">
+    <div id="center-line"></div>
+
+    <div id="ui-panel" style="display: none; opacity: 0;">
         <label class="file-label" for="file-input">
             📸 .exr パノラマ画像を選択
         </label>
         <input type="file" id="file-input" accept=".exr">
         
-        <!-- HDRならではの明暗調整用UI -->
         <div class="control-box">
+            <div class="control-row">
+                <label for="ipd">目の間隔 (IPD)</label>
+                <input type="range" id="ipd" min="0" max="4" step="0.1" value="1.0">
+            </div>
             <div class="control-row">
                 <label for="exposure">露出 (Brightness)</label>
                 <input type="range" id="exposure" min="0.1" max="4.0" step="0.1" value="1.0">
             </div>
         </div>
         
-        <div id="status">.exrファイル（正距円筒図法）を選択してください。</div>
+        <div id="status">画面タップでUIの表示/非表示を切り替え</div>
     </div>
 
     <div id="canvas-container"></div>
@@ -153,51 +179,104 @@
         import * as THREE from 'three';
         import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 
-        let scene, camera, renderer;
+        let scene, renderer, sphereMaterial, sphere;
+        let cameraRig, cameraLeft, cameraRight;
         let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
         let screenOrientation = 0;
         let isGyroEnabled = false;
+        
+        let ipd = 1.0; 
+        let uiTimeout;
 
         const overlay = document.getElementById('overlay');
         const startBtn = document.getElementById('start-btn');
+        const centerLine = document.getElementById('center-line');
         const uiPanel = document.getElementById('ui-panel');
         const fileInput = document.getElementById('file-input');
         const statusText = document.getElementById('status');
         const exposureInput = document.getElementById('exposure');
+        const ipdInput = document.getElementById('ipd');
+        const container = document.getElementById('canvas-container');
 
         function initThree() {
-            const container = document.getElementById('canvas-container');
-            
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            cameraRig = new THREE.Group();
+            scene.add(cameraRig);
+
+            const aspect = (window.innerWidth / 2) / window.innerHeight;
+            cameraLeft = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+            cameraRight = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+            
+            updateCameraPositions();
+            
+            cameraRig.add(cameraLeft);
+            cameraRig.add(cameraRight);
             
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             
-            // EXRの高輝度を綺麗に表現するためのトーンマッピング設定
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
             renderer.toneMappingExposure = 1.0;
             renderer.outputColorSpace = THREE.SRGBColorSpace;
             
             container.appendChild(renderer.domElement);
 
-            camera.position.set(0, 0, 0);
+            const geometry = new THREE.SphereGeometry(60, 60, 40);
+            geometry.scale(-1, 1, 1);
+
+            sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x1c1c24 });
+            sphere = new THREE.Mesh(geometry, sphereMaterial);
+            scene.add(sphere);
 
             window.addEventListener('resize', onWindowResize);
             
-            // 露出スライダーの制御
             exposureInput.addEventListener('input', (e) => {
                 renderer.toneMappingExposure = parseFloat(e.target.value);
+                resetUITimer();
+            });
+
+            ipdInput.addEventListener('input', (e) => {
+                ipd = parseFloat(e.target.value);
+                updateCameraPositions();
+                resetUITimer();
+            });
+
+            container.addEventListener('click', () => {
+                if (uiPanel.style.opacity === '0') {
+                    showUI();
+                } else {
+                    hideUI();
+                }
+            });
+
+            uiPanel.addEventListener('click', (e) => {
+                e.stopPropagation();
+                resetUITimer();
             });
 
             animate();
         }
 
+        function updateCameraPositions() {
+            const offset = ipd * 0.5;
+            cameraLeft.position.set(-offset, 0, 0);
+            cameraRight.position.set(offset, 0, 0);
+        }
+
         function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const aspect = (width / 2) / height;
+
+            cameraLeft.aspect = aspect;
+            cameraLeft.updateProjectionMatrix();
+            
+            cameraRight.aspect = aspect;
+            cameraRight.updateProjectionMatrix();
+            
+            renderer.setSize(width, height);
         }
 
         const zee = new THREE.Vector3(0, 0, 1);
@@ -214,53 +293,75 @@
             const orient = screenOrientation ? THREE.MathUtils.degToRad(screenOrientation) : 0;
 
             euler.set(beta, alpha, -gamma, 'YXZ');
-            camera.quaternion.setFromEuler(euler);
-            camera.quaternion.multiply(q1);
-            camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient));
+            cameraRig.quaternion.setFromEuler(euler);
+            cameraRig.quaternion.multiply(q1);
+            cameraRig.quaternion.multiply(q0.setFromAxisAngle(zee, -orient));
         }
 
         function animate() {
             requestAnimationFrame(animate);
             updateCameraOrientation();
-            renderer.render(scene, camera);
+            
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            renderer.setScissorTest(true);
+            
+            renderer.setViewport(0, 0, width / 2, height);
+            renderer.setScissor(0, 0, width / 2, height);
+            renderer.render(scene, cameraLeft);
+            
+            renderer.setViewport(width / 2, 0, width / 2, height);
+            renderer.setScissor(width / 2, 0, width / 2, height);
+            renderer.render(scene, cameraRight);
         }
 
-        // EXRファイルの読み込み・デコード処理
         fileInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
-            statusText.textContent = 'EXRデータをデコード中... (数秒かかります)';
+            statusText.textContent = 'EXRデコード中...';
+            resetUITimer();
             
-            // ファイルをメモリ内の仮想URLに紐付け
             const objectURL = URL.createObjectURL(file);
-            
             const loader = new EXRLoader();
-            // モバイルのメモリ制限を考慮し、16bitハーフフロート形式で省メモリに展開
             loader.setDataType(THREE.HalfFloatType); 
             
             loader.load(objectURL, function(texture) {
-                // 360度パノラマ（Equirectangular）用のアタッチメント設定
-                texture.mapping = THREE.EquirectangularReflectionMapping;
                 texture.minFilter = THREE.LinearFilter;
                 texture.magFilter = THREE.LinearFilter;
                 texture.needsUpdate = true;
 
-                // シーンの背景（スカイボックス）として適用（これで球体オブジェクトが不要に）
-                scene.background = texture;
+                sphereMaterial.map = texture;
+                sphereMaterial.color.setHex(0xffffff);
+                sphereMaterial.needsUpdate = true;
                 
                 statusText.textContent = `表示中: ${file.name}`;
-                
-                // 読み込み完了後にオブジェクトURLを解放してメモリ漏れを防止
                 URL.revokeObjectURL(objectURL);
             }, 
             undefined, 
             function(error) {
                 console.error(error);
-                statusText.textContent = 'エラー: EXRの解析に失敗しました。ファイル破損か非対応形式です。';
+                statusText.textContent = 'エラー: EXRの解析に失敗しました。';
                 URL.revokeObjectURL(objectURL);
             });
         });
+
+        function hideUI() {
+            uiPanel.style.opacity = '0';
+            uiPanel.style.pointerEvents = 'none';
+        }
+
+        function showUI() {
+            uiPanel.style.opacity = '1';
+            uiPanel.style.pointerEvents = 'auto';
+            resetUITimer();
+        }
+
+        function resetUITimer() {
+            clearTimeout(uiTimeout);
+            uiTimeout = setTimeout(hideUI, 3000);
+        }
 
         function updateScreenOrientation() {
             screenOrientation = window.orientation || 0;
@@ -275,7 +376,7 @@
                     if (permissionState === 'granted') {
                         setupGyroListeners();
                     } else {
-                        alert('センサーへのアクセス権限が拒否されました。');
+                        alert('センサーの権限が拒否されました。');
                     }
                 } catch (error) {
                     console.error(error);
@@ -288,7 +389,10 @@
             overlay.style.opacity = '0';
             setTimeout(() => {
                 overlay.style.display = 'none';
+                centerLine.style.display = 'block';
                 uiPanel.style.display = 'flex';
+                uiPanel.offsetHeight; 
+                showUI();
             }, 500);
         });
 
