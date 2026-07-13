@@ -1,3 +1,15 @@
+ご報告ありがとうございます。
+原因は、直前のアップデートでYouTube側の標準コントロール（画質設定、再生バーなど）をVRゴーグル装着時でもタップ操作しやすくするため、「画面全体へのクリックによるUIパネルの表示/非表示（トグル）」機能を意図的に削除したためです。VRゴーグルの前面をタップした際に、YouTubeコントロールを操作したいのか、UIトグルをしたいのかが判別できず干渉してしまうため、トグルを犠牲にしていました。
+しかし、操作パネルが消えたままでは不便ですので、YouTubeコントロールの操作を邪魔しない、新しいUIトグル方法を導入しました。
+解決策：UI非表示時のみ、透明なトグル用オーバーレイを前面に配置する
+UIトグル機能を復活させつつ、YouTubeコントロールの操作と干渉させないために、以下のロジックに変更しました。
+ * HTMLへの追加: 3D空間全体（YouTube画面より前面、操作パネルより背面）を覆う、完全に透明なトグル専用のオーバーレイ層（id="toggle-overlay"）を追加しました。
+ * JavaScriptのロジック変更:
+   * UIが表示されているとき: 透明オーバーレイを非表示にします。これでYouTube側のコントロールバーを自由にタップ操作できます。
+   * UIが自動非表示になったとき: 透明オーバーレイを表示します（前面に配置）。これで画面のどこかをタップすると、このオーバーレイがクリックを検知し、UIを再表示します。
+   * 重要: UIパネル内部（スライダーやボタン）をクリックした場合は、イベント伝播を停止しているため、UIパネルは消えません（タイマーのみリセットされます）。
+これで、YouTubeコントロールの操作性を維持したまま、一度消えたUIパネルをタップで再表示できるようになりました。
+修正版実装コード (index.html)
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -18,6 +30,7 @@
         }
         #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
         
+        /* YouTube画面の操作（クリック等）を有効化するため pointer-events: auto に設定 */
         #css-container-left, #css-container-right {
             position: absolute; top: 0; width: 50vw; height: 100vh; overflow: hidden; pointer-events: auto; z-index: 2;
         }
@@ -73,7 +86,6 @@
         .slider-item label { width: 50px; color: #ccc; shrink: 0; }
         .slider-item input[type="range"] { flex: 1; accent-color: #007aff; margin: 0; min-width: 0; }
         
-        /* ★ 追加: 数値入力ボックス用のスタイル */
         .num-input {
             width: 38px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.2);
             color: white; border-radius: 4px; font-size: 11px; text-align: center; padding: 2px 0;
@@ -105,6 +117,9 @@
     <div id="css-container-left"></div>
     <div id="css-container-right"></div>
 
+    <!-- ★ 追加: UIトグル用の透明なオーバーレイ（VRゴーグル装着時でもタップしやすいように最前面に配置） -->
+    <div id="toggle-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; pointer-events: auto; background: transparent;"></div>
+
     <div id="ui-panel" style="display: none; opacity: 0;">
         <div class="control-box">
             <div class="url-row">
@@ -123,7 +138,6 @@
                 <div class="slider-item"><label>画面距離</label><input type="range" id="yt-dist" min="10" max="100" value="35"></div>
                 <div class="slider-item"><label>画面サイズ</label><input type="range" id="yt-size" min="0.2" max="4.0" step="0.1" value="1.5"></div>
                 
-                <!-- ★ 変更点: 目間隔の横に入力ボックスを追加 -->
                 <div class="slider-item">
                     <label>目間隔</label>
                     <input type="range" id="ipd" min="0" max="16" step="0.1" value="1.0">
@@ -180,6 +194,7 @@
         const startBtn = document.getElementById('start-btn');
         const centerLine = document.getElementById('center-line');
         const uiPanel = document.getElementById('ui-panel');
+        const toggleOverlay = document.getElementById('toggle-overlay'); // ★
         const fileInput = document.getElementById('file-input');
         const videoInput = document.getElementById('video-input');
         const statusText = document.getElementById('status');
@@ -188,7 +203,7 @@
         
         const exposureInput = document.getElementById('exposure');
         const ipdInput = document.getElementById('ipd');
-        const ipdNumInput = document.getElementById('ipd-num'); // ★ 追加
+        const ipdNumInput = document.getElementById('ipd-num');
         const ytDistInput = document.getElementById('yt-dist');
         const ytSizeInput = document.getElementById('yt-size');
         const ytUrlInput = document.getElementById('yt-url');
@@ -250,7 +265,6 @@
             ytDistInput.addEventListener('input', (e) => { ytDistance = parseFloat(e.target.value); updateScreensTransform(); resetUITimer(); });
             ytSizeInput.addEventListener('input', (e) => { ytScaleFactor = parseFloat(e.target.value); updateScreensTransform(); resetUITimer(); });
 
-            // ★ 変更点: 目間隔スライダー操作時に数値入力も連動させる
             ipdInput.addEventListener('input', (e) => {
                 ipd = parseFloat(e.target.value);
                 ipdNumInput.value = ipd.toFixed(1);
@@ -258,15 +272,11 @@
                 resetUITimer();
             });
 
-            // ★ 変更点: 数値入力ボックス直接変更時の連動とバリデーション
             ipdNumInput.addEventListener('input', (e) => {
                 let val = parseFloat(e.target.value);
                 if (isNaN(val)) return;
-                
-                // min/maxを超えないようクリップ
                 if (val < 0) val = 0;
                 if (val > 16) val = 16;
-                
                 ipd = val;
                 ipdInput.value = val;
                 updateCameraPositions();
@@ -326,6 +336,14 @@
             });
 
             vidRecenterBtn.addEventListener('click', () => { recenterScreens(); resetUITimer(); });
+            
+            // ★ 追加: UIトグル用透明オーバーレイのクリックイベント
+            // 自動非表示になったときだけこのオーバーレイが前面に表示され、タップを検知してUIを再表示します
+            toggleOverlay.addEventListener('click', () => {
+                showUI();
+            });
+
+            // UIパネル内部の操作で親のクリックイベント（非表示化）が暴発するのを防ぐ
             uiPanel.addEventListener('click', (e) => { e.stopPropagation(); resetUITimer(); });
 
             videoInput.addEventListener('change', function(e) {
@@ -391,6 +409,7 @@
             if (screenLeftObj) sceneCSSLeft.remove(screenLeftObj);
             if (screenRightObj) sceneCSSRight.remove(screenRightObj);
 
+            // サポートするYouTubeの埋め込みパラメータ
             const createIframe = (domId) => {
                 const iframe = document.createElement('iframe');
                 iframe.id = domId; iframe.width = "640"; iframe.height = "360";
@@ -526,8 +545,21 @@
             });
         });
 
-        function hideUI() { uiPanel.style.opacity = '0'; uiPanel.style.pointerEvents = 'none'; }
-        function showUI() { uiPanel.style.opacity = '1'; uiPanel.style.pointerEvents = 'auto'; resetUITimer(); }
+        // ★ 変更点: トグルロジックの整理
+        function hideUI() {
+            uiPanel.style.opacity = '0';
+            uiPanel.style.pointerEvents = 'none';
+            toggleOverlay.style.display = 'block'; // ★ 追加: タップを検知できるようにオーバーレイを表示
+        }
+
+        function showUI() {
+            uiPanel.style.opacity = '1';
+            uiPanel.style.pointerEvents = 'auto';
+            toggleOverlay.style.display = 'none'; // ★ 追加: UIが表示されている間はオーバーレイを隠す
+            resetUITimer();
+        }
+
+        // 自動フェードアウト時間は標準UI操作のために長めの8秒設定をキープ
         function resetUITimer() { clearTimeout(uiTimeout); uiTimeout = setTimeout(hideUI, 8000); }
 
         startBtn.addEventListener('click', async () => {
@@ -556,3 +588,4 @@
     </script>
 </body>
 </html>
+
