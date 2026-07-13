@@ -3,226 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>360° VR EXR + YouTube Viewer</title>
+    <title>360° VR EXR + VR Video Viewer</title>
 
-    <!-- iPhone全画面化（ホーム画面追加用）設定 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="VR YT Viewer">
+    <meta name="apple-mobile-web-app-title" content="VR Viewer">
 
     <style>
         html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            position: fixed;
-            background-color: #000;
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+            position: fixed; background-color: #000;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            -webkit-user-select: none;
-            user-select: none;
+            -webkit-user-select: none; user-select: none;
         }
-        
-        #canvas-container {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 1;
-        }
-
-        /* 左右に分割したCSS3Dレンダラー用コンテナ */
+        #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
         #css-container-left, #css-container-right {
-            position: absolute;
-            top: 0;
-            width: 50vw;
-            height: 100vh;
-            overflow: hidden;
-            pointer-events: none;
-            z-index: 2;
+            position: absolute; top: 0; width: 50vw; height: 100vh; overflow: hidden; pointer-events: none; z-index: 2;
         }
         #css-container-left { left: 0; }
         #css-container-right { right: 0; }
-        
         #center-line {
-            position: absolute;
-            top: 0;
-            left: 50%;
-            width: 1px;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.2);
-            z-index: 5;
-            pointer-events: none;
-            display: none;
+            position: absolute; top: 0; left: 50%; width: 1px; height: 100%;
+            background: rgba(255, 255, 255, 0.2); z-index: 5; pointer-events: none; display: none;
         }
-        
         #overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.9);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-            color: white;
-            text-align: center;
-            padding: 20px;
-            box-sizing: border-box;
-            transition: opacity 0.5s ease;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100;
+            color: white; text-align: center; padding: 20px; box-sizing: border-box;
         }
-        
         .btn {
-            background: #007aff;
-            color: white;
-            border: none;
-            padding: 14px 28px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 12px;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0, 122, 255, 0.4);
-            margin-top: 15px;
+            background: #007aff; color: white; border: none; padding: 14px 28px;
+            font-size: 16px; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 15px;
         }
-        
         #ui-panel {
-            position: absolute;
-            bottom: 15px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-            width: 95%;
-            max-width: 480px;
-            transition: opacity 0.4s ease;
-            pointer-events: auto;
+            position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); z-index: 10;
+            display: flex; flex-direction: column; align-items: center; gap: 8px; width: 95%; max-width: 480px;
+            transition: opacity 0.4s ease; pointer-events: auto;
         }
-        
         .file-label {
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            padding: 8px 16px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 500;
+            background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            color: white; border: 1px solid rgba(255, 255, 255, 0.3); padding: 6px 12px;
+            border-radius: 20px; cursor: pointer; font-size: 11px; font-weight: 500; text-align: center;
         }
-        
-        #file-input {
-            display: none;
-        }
-        
+        .file-inputs-row { display: flex; gap: 8px; width: 100%; justify-content: center; }
+        input[type="file"] { display: none; }
         .control-box {
-            width: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 10px 14px;
-            border-radius: 16px;
-            box-sizing: border-box;
-            color: white;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+            width: 100%; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2); padding: 10px 14px; border-radius: 16px;
+            box-sizing: border-box; color: white; display: flex; flex-direction: column; gap: 8px;
         }
-        
-        .url-row {
-            display: flex;
-            gap: 6px;
-            width: 100%;
-        }
-        
+        .url-row { display: flex; gap: 6px; width: 100%; }
         #yt-url {
-            flex: 1;
-            background: rgba(255, 255, 255, 0.15);
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            color: white;
-            padding: 6px 10px;
-            border-radius: 8px;
-            font-size: 12px;
+            flex: 1; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.25);
+            color: white; padding: 6px 10px; border-radius: 8px; font-size: 12px;
         }
-        
-        #yt-load-btn {
-            background: #34c759;
-            color: white;
-            border: none;
-            padding: 6px 14px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        
-        .btn-row {
-            display: flex;
-            gap: 6px;
-            width: 100%;
-        }
-        
-        .btn-row button {
-            flex: 1;
-            color: white;
-            border: none;
-            padding: 8px 4px;
-            border-radius: 8px;
-            font-size: 11px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        
-        #yt-play-btn { background: #007aff; }
-        #yt-pause-btn { background: #ff3b30; }
-        #yt-recenter-btn { background: #ff9500; }
-        
-        .sliders-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px 12px;
-            width: 100%;
-        }
-        
-        .slider-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: 11px;
-        }
-        
-        .slider-item label {
-            width: 50px;
-            color: #ccc;
-        }
-        
-        .slider-item input {
-            flex: 1;
-            accent-color: #007aff;
-            margin: 0;
-        }
-        
-        #status {
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 11px;
-            text-align: center;
-        }
-
-        .tip-jar {
-            font-size: 12px;
-            color: #aaa;
-            line-height: 1.5;
-            margin-bottom: 5px;
-        }
+        #yt-load-btn { background: #34c759; color: white; border: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; }
+        .btn-row { display: flex; gap: 6px; width: 100%; }
+        .btn-row button { flex: 1; color: white; border: none; padding: 8px 4px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer; }
+        #vid-play-btn { background: #007aff; }
+        #vid-pause-btn { background: #ff3b30; }
+        #vid-recenter-btn { background: #ff9500; }
+        .sliders-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; width: 100%; }
+        .slider-item { display: flex; align-items: center; justify-content: space-between; font-size: 11px; }
+        .slider-item label { width: 50px; color: #ccc; }
+        .slider-item input { flex: 1; accent-color: #007aff; margin: 0; }
+        #status { color: rgba(255, 255, 255, 0.8); font-size: 11px; text-align: center; min-height: 14px; }
     </style>
     
     <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
@@ -237,65 +82,55 @@
 </head>
 <body>
 
-    <!-- 起動画面 -->
     <div id="overlay">
-        <h2>360° VR EXR + YouTube</h2>
-        <p class="tip-jar">
-            【全画面化の手順】Safariの「共有」メニューから「ホーム画面に追加」して起動すると、完全全画面VRになります。
-        </p>
+        <h2>360° VR EXR + Video Viewer</h2>
         <button class="btn" id="start-btn">VRモードを開始</button>
     </div>
 
-    <!-- センターライン -->
     <div id="center-line"></div>
-
-    <!-- 左右のCSS3D独立コンテナ -->
     <div id="css-container-left"></div>
     <div id="css-container-right"></div>
 
-    <!-- 操作パネル -->
     <div id="ui-panel" style="display: none; opacity: 0;">
         <div class="control-box">
-            <!-- URL入力 -->
+            <!-- YouTube URL入力 -->
             <div class="url-row">
-                <input type="text" id="yt-url" placeholder="YouTube動画のURLを入力" value="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
-                <button id="yt-load-btn">動画読込</button>
+                <input type="text" id="yt-url" placeholder="YouTube動画のURL" value="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
+                <button id="yt-load-btn">YouTube読込</button>
             </div>
             
-            <!-- 同時再生コントロール ＆ 正面配置 -->
+            <!-- 再生・停止コントロール -->
             <div class="btn-row">
-                <button id="yt-play-btn">▶ 同時再生</button>
-                <button id="yt-pause-btn">❚❚ 同時停止</button>
-                <button id="yt-recenter-btn">🎯 正面に配置</button>
+                <button id="vid-play-btn">▶ 同時再生</button>
+                <button id="vid-pause-btn">❚❚ 同時停止</button>
+                <button id="vid-recenter-btn">🎯 正面に配置</button>
             </div>
             
-            <!-- 各種スライダー群 -->
+            <!-- スライダー群 -->
             <div class="sliders-grid">
-                <div class="slider-item">
-                    <label>YT距離</label>
-                    <input type="range" id="yt-dist" min="10" max="100" step="1" value="35">
-                </div>
-                <div class="slider-item">
-                    <label>YTサイズ</label>
-                    <input type="range" id="yt-size" min="0.2" max="4.0" step="0.1" value="1.5">
-                </div>
-                <div class="slider-item">
-                    <!-- ★ 目の間隔（IPD）の最大値を4から16（4倍）に拡張 ★ -->
-                    <label>目間隔</label>
-                    <input type="range" id="ipd" min="0" max="16" step="0.1" value="1.0">
-                </div>
-                <div class="slider-item">
-                    <label>背景露出</label>
-                    <input type="range" id="exposure" min="0.1" max="4.0" step="0.1" value="1.0">
-                </div>
+                <div class="slider-item"><label>画面距離</label><input type="range" id="yt-dist" min="10" max="100" value="35"></div>
+                <div class="slider-item"><label>画面サイズ</label><input type="range" id="yt-size" min="0.2" max="4.0" step="0.1" value="1.5"></div>
+                <div class="slider-item"><label>目間隔</label><input type="range" id="ipd" min="0" max="16" step="0.1" value="1.0"></div>
+                <div class="slider-item"><label>背景露出</label><input type="range" id="exposure" min="0.1" max="4.0" step="0.1" value="1.0"></div>
             </div>
-            <div id="status">背景タップでUI表示。YouTube読込後に同時再生を押してください。</div>
-            <label class="file-label" for="file-input" style="align-self: center;">📸 背景 .exr 画像を選択</label>
-            <input type="file" id="file-input" accept=".exr">
+
+            <div id="status">動画ファイルを読み込むと、スマホでも確実に100%同期再生できます。</div>
+            
+            <!-- ファイル選択行 -->
+            <div class="file-inputs-row">
+                <label class="file-label" for="video-input">🎞️ 動画ファイル(.mp4等)を選択</label>
+                <input type="file" id="video-input" accept="video/*">
+                
+                <label class="file-label" for="file-input">📸 背景 .exr 選択</label>
+                <input type="file" id="file-input" accept=".exr">
+            </div>
         </div>
     </div>
 
     <div id="canvas-container"></div>
+
+    <!-- 背景で再生転送する用のHidden Videoタグ -->
+    <video id="local-video" loop playsinline webkit-playsinline crossOrigin="anonymous" style="display:none;"></video>
 
     <script src="https://www.youtube.com/iframe_api"></script>
 
@@ -308,9 +143,13 @@
         let cameraRig, cameraLeft, cameraRight;
         let cssRendererLeft, cssRendererRight;
         let sceneCSSLeft, sceneCSSRight;
-        let youtubeLeftObj, youtubeRightObj;
-        let playerLeft = null, playerRight = null;
+        let screenLeftObj, screenRightObj; // YouTube(CSS3D) または ローカルビデオ(Mesh) が入る
         
+        // ローカルビデオテクスチャ用
+        let videoElement, videoTexture, videoMeshLeft, videoMeshRight;
+        let isLocalVideoMode = false;
+
+        let playerLeft = null, playerRight = null;
         let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
         let screenOrientation = 0;
         let isGyroEnabled = false;
@@ -318,7 +157,7 @@
         let ipd = 1.0; 
         let ytDistance = 35;
         let ytScaleFactor = 1.5;
-        const baseYTScale = 0.02; 
+        const baseScale = 0.02; 
         let uiTimeout;
 
         const overlay = document.getElementById('overlay');
@@ -326,8 +165,10 @@
         const centerLine = document.getElementById('center-line');
         const uiPanel = document.getElementById('ui-panel');
         const fileInput = document.getElementById('file-input');
+        const videoInput = document.getElementById('video-input');
         const statusText = document.getElementById('status');
         const container = document.getElementById('canvas-container');
+        videoElement = document.getElementById('local-video');
         
         const exposureInput = document.getElementById('exposure');
         const ipdInput = document.getElementById('ipd');
@@ -335,9 +176,9 @@
         const ytSizeInput = document.getElementById('yt-size');
         const ytUrlInput = document.getElementById('yt-url');
         const ytLoadBtn = document.getElementById('yt-load-btn');
-        const ytPlayBtn = document.getElementById('yt-play-btn');
-        const ytPauseBtn = document.getElementById('yt-pause-btn');
-        const ytRecenterBtn = document.getElementById('yt-recenter-btn');
+        const vidPlayBtn = document.getElementById('vid-play-btn');
+        const vidPauseBtn = document.getElementById('vid-pause-btn');
+        const vidRecenterBtn = document.getElementById('vid-recenter-btn');
 
         function initThree() {
             scene = new THREE.Scene();
@@ -380,69 +221,98 @@
             document.getElementById('css-container-right').appendChild(cssRendererRight.domElement);
 
             window.addEventListener('resize', onWindowResize);
-            window.addEventListener('orientationchange', () => setTimeout(onWindowResize, 200));
-
             setupUIEventListeners();
+            
+            // 初期状態ではデフォルトのYouTubeを読み込み
             loadYouTubeVideo();
-
             animate();
         }
 
         function setupUIEventListeners() {
-            exposureInput.addEventListener('input', (e) => {
-                renderer.toneMappingExposure = parseFloat(e.target.value);
-                resetUITimer();
-            });
-
-            ipdInput.addEventListener('input', (e) => {
-                ipd = parseFloat(e.target.value);
-                updateCameraPositions();
-                resetUITimer();
-            });
-
-            ytDistInput.addEventListener('input', (e) => {
-                ytDistance = parseFloat(e.target.value);
-                updateYoutubeTransform();
-                resetUITimer();
-            });
-
-            ytSizeInput.addEventListener('input', (e) => {
-                ytScaleFactor = parseFloat(e.target.value);
-                updateYoutubeTransform();
-                resetUITimer();
-            });
+            exposureInput.addEventListener('input', (e) => { renderer.toneMappingExposure = parseFloat(e.target.value); resetUITimer(); });
+            ipdInput.addEventListener('input', (e) => { ipd = parseFloat(e.target.value); updateCameraPositions(); resetUITimer(); });
+            ytDistInput.addEventListener('input', (e) => { ytDistance = parseFloat(e.target.value); updateScreensTransform(); resetUITimer(); });
+            ytSizeInput.addEventListener('input', (e) => { ytScaleFactor = parseFloat(e.target.value); updateScreensTransform(); resetUITimer(); });
 
             ytLoadBtn.addEventListener('click', () => {
+                isLocalVideoMode = false;
+                videoElement.pause();
+                if(videoMeshLeft) { scene.remove(videoMeshLeft); scene.remove(videoMeshRight); }
                 loadYouTubeVideo();
                 resetUITimer();
             });
 
-            ytPlayBtn.addEventListener('click', () => {
-                if (playerLeft && playerLeft.playVideo) playerLeft.playVideo();
-                if (playerRight && playerRight.playVideo) playerRight.playVideo();
-                statusText.textContent = "同時に再生中...";
+            vidPlayBtn.addEventListener('click', () => {
+                if (isLocalVideoMode) {
+                    videoElement.play().catch(err => console.log(err));
+                    statusText.textContent = "ローカル動画を同期再生中...";
+                } else {
+                    // YouTube制限対策：右側を強制ミュートにして競合を防ぐ試み
+                    if (playerRight && playerRight.mute) playerRight.mute(); 
+                    if (playerLeft && playerLeft.playVideo) playerLeft.playVideo();
+                    setTimeout(() => {
+                        if (playerRight && playerRight.playVideo) playerRight.playVideo();
+                    }, 150);
+                    statusText.textContent = "YouTubeを再生（スマホの場合、競合により片方が止まることがあります）";
+                }
                 resetUITimer();
             });
 
-            ytPauseBtn.addEventListener('click', () => {
-                if (playerLeft && playerLeft.pauseVideo) playerLeft.pauseVideo();
-                if (playerRight && playerRight.pauseVideo) playerRight.pauseVideo();
+            vidPauseBtn.addEventListener('click', () => {
+                if (isLocalVideoMode) {
+                    videoElement.pause();
+                } else {
+                    if (playerLeft && playerLeft.pauseVideo) playerLeft.pauseVideo();
+                    if (playerRight && playerRight.pauseVideo) playerRight.pauseVideo();
+                }
                 statusText.textContent = "一時停止しました。";
                 resetUITimer();
             });
 
-            ytRecenterBtn.addEventListener('click', () => {
-                recenterYoutubeScreen();
-                resetUITimer();
-            });
+            vidRecenterBtn.addEventListener('click', () => { recenterScreens(); resetUITimer(); });
+            container.addEventListener('click', () => { if (uiPanel.style.opacity === '0') showUI(); else hideUI(); });
+            uiPanel.addEventListener('click', (e) => { e.stopPropagation(); resetUITimer(); });
 
-            container.addEventListener('click', () => {
-                if (uiPanel.style.opacity === '0') showUI(); else hideUI();
-            });
+            // 動画ファイルが選択された時の処理
+            videoInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
 
-            uiPanel.addEventListener('click', (e) => {
-                e.stopPropagation();
-                resetUITimer();
+                isLocalVideoMode = true;
+                statusText.textContent = "動画ファイルを読み込み中...";
+
+                // YouTubeを破棄
+                if (screenLeftObj) sceneCSSLeft.remove(screenLeftObj);
+                if (screenRightObj) sceneCSSRight.remove(screenRightObj);
+                playerLeft = null; playerRight = null;
+
+                const fileURL = URL.createObjectURL(file);
+                videoElement.src = fileURL;
+                videoElement.load();
+
+                // ビデオテクスチャの構築
+                videoTexture = new THREE.VideoTexture(videoElement);
+                videoTexture.minFilter = THREE.LinearFilter;
+                videoTexture.magFilter = THREE.LinearFilter;
+                videoTexture.colorSpace = THREE.SRGBColorSpace;
+
+                // 16:9 の平面スクリーンを左右に作成
+                const movieGeo = new THREE.PlaneGeometry(16, 9);
+                const movieMat = new THREE.MeshBasicMaterial({ map: videoTexture, side: THREE.DoubleSide });
+
+                if(videoMeshLeft) { scene.remove(videoMeshLeft); scene.remove(videoMeshRight); }
+                videoMeshLeft = new THREE.Mesh(movieGeo, movieMat);
+                videoMeshRight = new THREE.Mesh(movieGeo, movieMat);
+
+                // レンダリング時のレイヤー分け（左目＝レイヤー1、右目＝レイヤー2）
+                videoMeshLeft.layers.set(1);
+                videoMeshRight.layers.set(2);
+
+                scene.add(videoMeshLeft);
+                scene.add(videoMeshRight);
+
+                recenterScreens();
+                statusText.textContent = "動画ファイルの読み込み完了！100%同期再生が可能です。";
             });
         }
 
@@ -450,6 +320,12 @@
             const offset = ipd * 0.5;
             cameraLeft.position.set(-offset, 0, 0);
             cameraRight.position.set(offset, 0, 0);
+            
+            // レイヤー割り当て
+            cameraLeft.layers.enable(0);  // 背景用
+            cameraLeft.layers.enable(1);  // 左目専用オブジェクト用
+            cameraRight.layers.enable(0); // 背景用
+            cameraRight.layers.enable(2); // 右目専用オブジェクト用
         }
 
         function extractVideoId(url) {
@@ -460,100 +336,88 @@
 
         function loadYouTubeVideo() {
             const id = extractVideoId(ytUrlInput.value);
-            if (!id) {
-                statusText.textContent = "エラー: 正しいYouTubeのURLを入力してください。";
-                return;
-            }
+            if (!id) { statusText.textContent = "エラー: 正しいYouTubeのURLを入力してください。"; return; }
 
             statusText.textContent = "YouTube動画を初期化中...";
-
-            if (youtubeLeftObj) sceneCSSLeft.remove(youtubeLeftObj);
-            if (youtubeRightObj) sceneCSSRight.remove(youtubeRightObj);
-
-            playerLeft = null;
-            playerRight = null;
+            if (screenLeftObj) sceneCSSLeft.remove(screenLeftObj);
+            if (screenRightObj) sceneCSSRight.remove(screenRightObj);
 
             const createIframe = (domId) => {
                 const iframe = document.createElement('iframe');
-                iframe.id = domId;
-                iframe.width = "640";
-                iframe.height = "360";
+                iframe.id = domId; iframe.width = "640"; iframe.height = "360";
                 iframe.src = `https://www.youtube.com/embed/${id}?enablejsapi=1&controls=0&rel=0&playsinline=1&origin=${window.location.origin}`;
-                iframe.style.border = "none";
-                iframe.style.backgroundColor = "#000";
+                iframe.style.border = "none"; iframe.style.backgroundColor = "#000";
                 return iframe;
             };
 
             const elLeft = createIframe('yt-frame-left');
             const elRight = createIframe('yt-frame-right');
 
-            youtubeLeftObj = new CSS3DObject(elLeft);
-            youtubeRightObj = new CSS3DObject(elRight);
+            screenLeftObj = new CSS3DObject(elLeft);
+            screenRightObj = new CSS3DObject(elRight);
 
-            sceneCSSLeft.add(youtubeLeftObj);
-            sceneCSSRight.add(youtubeRightObj);
+            sceneCSSLeft.add(screenLeftObj);
+            sceneCSSRight.add(screenRightObj);
 
-            recenterYoutubeScreen();
+            recenterScreens();
 
             if (typeof YT !== 'undefined' && YT.Player) {
                 setTimeout(() => {
                     playerLeft = new YT.Player(elLeft, {
-                        events: { 'onReady': () => { statusText.textContent = "動画準備完了。同時再生を押してください。"; } }
+                        events: { 'onReady': () => { statusText.textContent = "YouTube準備完了。スマホで止まる場合は動画ファイルをお試しください。"; } }
                     });
                     playerRight = new YT.Player(elRight);
                 }, 500);
             }
         }
 
-        function updateYoutubeTransform() {
-            if (!youtubeLeftObj || !youtubeRightObj) return;
+        function updateScreensTransform() {
+            const scale = (isLocalVideoMode ? 0.15 : baseScale) * ytScaleFactor;
 
-            const scale = baseYTScale * ytScaleFactor;
-            youtubeLeftObj.scale.set(scale, scale, scale);
-            youtubeRightObj.scale.set(scale, scale, scale);
-
-            let dir = youtubeLeftObj.position.clone().normalize();
-            if (dir.lengthSq() === 0) dir.set(0, 0, -1);
-
-            const targetPos = dir.multiplyScalar(ytDistance);
-            youtubeLeftObj.position.copy(targetPos);
-            youtubeRightObj.position.copy(targetPos);
+            if (isLocalVideoMode && videoMeshLeft) {
+                videoMeshLeft.scale.set(scale, scale, scale);
+                videoMeshRight.scale.set(scale, scale, scale);
+                let dir = videoMeshLeft.position.clone().normalize();
+                if (dir.lengthSq() === 0) dir.set(0, 0, -1);
+                const targetPos = dir.multiplyScalar(ytDistance);
+                videoMeshLeft.position.copy(targetPos);
+                videoMeshRight.position.copy(targetPos);
+            } else if (screenLeftObj && screenRightObj) {
+                screenLeftObj.scale.set(scale, scale, scale);
+                screenRightObj.scale.set(scale, scale, scale);
+                let dir = screenLeftObj.position.clone().normalize();
+                if (dir.lengthSq() === 0) dir.set(0, 0, -1);
+                const targetPos = dir.multiplyScalar(ytDistance);
+                screenLeftObj.position.copy(targetPos);
+                screenRightObj.position.copy(targetPos);
+            }
         }
 
-        function recenterYoutubeScreen() {
-            if (!youtubeLeftObj || !youtubeRightObj) return;
-
+        function recenterScreens() {
             const dir = new THREE.Vector3(0, 0, -1);
-            if (cameraRig) {
-                dir.applyQuaternion(cameraRig.quaternion);
-            }
+            if (cameraRig) dir.applyQuaternion(cameraRig.quaternion);
             dir.normalize();
-
             const targetPos = dir.clone().multiplyScalar(ytDistance);
-            youtubeLeftObj.position.copy(targetPos);
-            youtubeRightObj.position.copy(targetPos);
 
-            // ★ 修正点: lookAtだけでカメラに正対するため、余計な反転(rotation.y += Math.PI)を削除 ★
-            youtubeLeftObj.lookAt(0, 0, 0);
-            youtubeRightObj.lookAt(0, 0, 0);
-
-            const scale = baseYTScale * ytScaleFactor;
-            youtubeLeftObj.scale.set(scale, scale, scale);
-            youtubeRightObj.scale.set(scale, scale, scale);
-            
-            statusText.textContent = "YouTube画面を現在の正面に配置しました。";
+            if (isLocalVideoMode && videoMeshLeft) {
+                videoMeshLeft.position.copy(targetPos);
+                videoMeshRight.position.copy(targetPos);
+                videoMeshLeft.lookAt(0, 0, 0);
+                videoMeshRight.lookAt(0, 0, 0);
+            } else if (screenLeftObj && screenRightObj) {
+                screenLeftObj.position.copy(targetPos);
+                screenRightObj.position.copy(targetPos);
+                screenLeftObj.lookAt(0, 0, 0);
+                screenRightObj.lookAt(0, 0, 0);
+            }
+            updateScreensTransform();
         }
 
         function onWindowResize() {
-            const width = window.innerWidth;
-            const height = window.innerHeight;
+            const width = window.innerWidth; const height = window.innerHeight;
             const aspect = (width / 2) / height;
-
-            cameraLeft.aspect = aspect;
-            cameraLeft.updateProjectionMatrix();
-            cameraRight.aspect = aspect;
-            cameraRight.updateProjectionMatrix();
-            
+            cameraLeft.aspect = aspect; cameraLeft.updateProjectionMatrix();
+            cameraRight.aspect = aspect; cameraRight.updateProjectionMatrix();
             renderer.setSize(width, height);
             cssRendererLeft.setSize(width / 2, height);
             cssRendererRight.setSize(width / 2, height);
@@ -566,7 +430,6 @@
 
         function updateCameraOrientation() {
             if (!isGyroEnabled) return;
-
             const alpha = deviceOrientation.alpha ? THREE.MathUtils.degToRad(deviceOrientation.alpha) : 0;
             const beta = deviceOrientation.beta ? THREE.MathUtils.degToRad(deviceOrientation.beta) : 0;
             const gamma = deviceOrientation.gamma ? THREE.MathUtils.degToRad(deviceOrientation.gamma) : 0;
@@ -584,111 +447,65 @@
             
             const width = window.innerWidth;
             const height = window.innerHeight;
-            
             renderer.setScissorTest(true);
             
+            // 左目描画
             renderer.setViewport(0, 0, width / 2, height);
             renderer.setScissor(0, 0, width / 2, height);
             renderer.render(scene, cameraLeft);
+            if (!isLocalVideoMode) cssRendererLeft.render(sceneCSSLeft, cameraLeft);
             
+            // 右目描画
             renderer.setViewport(width / 2, 0, width / 2, height);
             renderer.setScissor(width / 2, 0, width / 2, height);
             renderer.render(scene, cameraRight);
-            
-            cssRendererLeft.render(sceneCSSLeft, cameraLeft);
-            cssRendererRight.render(sceneCSSRight, cameraRight);
+            if (!isLocalVideoMode) cssRendererRight.render(sceneCSSRight, cameraRight);
         }
 
+        // EXR背景読み込み
         fileInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            statusText.textContent = 'EXRデコード中...';
-            resetUITimer();
-            
+            const file = e.target.files[0]; if (!file) return;
+            statusText.textContent = 'EXRデコード中...'; resetUITimer();
             const objectURL = URL.createObjectURL(file);
             const loader = new EXRLoader();
             loader.setDataType(THREE.HalfFloatType); 
-            
             loader.load(objectURL, function(texture) {
-                texture.minFilter = THREE.LinearFilter;
-                texture.magFilter = THREE.LinearFilter;
-                texture.needsUpdate = true;
-
-                sphereMaterial.map = texture;
-                sphereMaterial.color.setHex(0xffffff);
-                sphereMaterial.needsUpdate = true;
-                
+                texture.minFilter = THREE.LinearFilter; texture.magFilter = THREE.LinearFilter; texture.needsUpdate = true;
+                sphereMaterial.map = texture; sphereMaterial.color.setHex(0xffffff); sphereMaterial.needsUpdate = true;
                 statusText.textContent = `背景変更完了: ${file.name}`;
                 URL.revokeObjectURL(objectURL);
-            }, 
-            undefined, 
-            function(error) {
-                console.error(error);
+            }, undefined, function(error) {
                 statusText.textContent = 'エラー: EXRの解析に失敗しました。';
                 URL.revokeObjectURL(objectURL);
             });
         });
 
-        function hideUI() {
-            uiPanel.style.opacity = '0';
-            uiPanel.style.pointerEvents = 'none';
-        }
-
-        function showUI() {
-            uiPanel.style.opacity = '1';
-            uiPanel.style.pointerEvents = 'auto';
-            resetUITimer();
-        }
-
-        function resetUITimer() {
-            clearTimeout(uiTimeout);
-            uiTimeout = setTimeout(hideUI, 5000); 
-        }
-
-        function updateScreenOrientation() {
-            screenOrientation = window.orientation || 0;
-        }
+        function hideUI() { uiPanel.style.opacity = '0'; uiPanel.style.pointerEvents = 'none'; }
+        function showUI() { uiPanel.style.opacity = '1'; uiPanel.style.pointerEvents = 'auto'; resetUITimer(); }
+        function resetUITimer() { clearTimeout(uiTimeout); uiTimeout = setTimeout(hideUI, 5000); }
 
         startBtn.addEventListener('click', async () => {
             initThree();
-
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
                     const permissionState = await DeviceOrientationEvent.requestPermission();
-                    if (permissionState === 'granted') {
-                        setupGyroListeners();
-                    } else {
-                        alert('センサーの権限が拒否されました。');
-                    }
-                } catch (error) {
-                    console.error(error);
-                    alert('エラー: HTTPS環境で実行してください。');
-                }
-            } else {
-                setupGyroListeners();
-            }
+                    if (permissionState === 'granted') setupGyroListeners();
+                } catch (error) { alert('センサーの権限が拒否されました。'); }
+            } else { setupGyroListeners(); }
 
             overlay.style.opacity = '0';
             setTimeout(() => {
-                overlay.style.display = 'none';
-                centerLine.style.display = 'block';
-                uiPanel.style.display = 'flex';
-                uiPanel.offsetHeight; 
-                showUI();
+                overlay.style.display = 'none'; centerLine.style.display = 'block';
+                uiPanel.style.display = 'flex'; uiPanel.offsetHeight; showUI();
             }, 500);
         });
 
         function setupGyroListeners() {
             isGyroEnabled = true;
-            window.addEventListener('deviceorientation', (event) => {
-                deviceOrientation.alpha = event.alpha;
-                deviceOrientation.beta = event.beta;
-                deviceOrientation.gamma = event.gamma;
+            window.addEventListener('deviceorientation', (e) => {
+                deviceOrientation.alpha = e.alpha; deviceOrientation.beta = e.beta; deviceOrientation.gamma = e.gamma;
             }, false);
-
-            window.addEventListener('orientationchange', updateScreenOrientation, false);
-            updateScreenOrientation();
+            window.addEventListener('orientationchange', () => { screenOrientation = window.orientation || 0; }, false);
         }
     </script>
 </body>
