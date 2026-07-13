@@ -40,7 +40,7 @@
             width: 50vw;
             height: 100vh;
             overflow: hidden;
-            pointer-events: none; /* 下層のWebGLへのクリック（UIトグル用）を阻害しない */
+            pointer-events: none;
             z-index: 2;
         }
         #css-container-left { left: 0; }
@@ -90,7 +90,6 @@
             margin-top: 15px;
         }
         
-        /* 横向き画面に最適化したコンパクトなUIパネル */
         #ui-panel {
             position: absolute;
             bottom: 15px;
@@ -259,7 +258,7 @@
         <div class="control-box">
             <!-- URL入力 -->
             <div class="url-row">
-                <input type="text" id="yt-url" placeholder="YouTube動画のURLを入力（例: https://youtu.be/...）" value="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
+                <input type="text" id="yt-url" placeholder="YouTube動画のURLを入力" value="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
                 <button id="yt-load-btn">動画読込</button>
             </div>
             
@@ -281,15 +280,16 @@
                     <input type="range" id="yt-size" min="0.2" max="4.0" step="0.1" value="1.5">
                 </div>
                 <div class="slider-item">
+                    <!-- ★ 目の間隔（IPD）の最大値を4から16（4倍）に拡張 ★ -->
                     <label>目間隔</label>
-                    <input type="range" id="ipd" min="0" max="4" step="0.1" value="1.0">
+                    <input type="range" id="ipd" min="0" max="16" step="0.1" value="1.0">
                 </div>
                 <div class="slider-item">
                     <label>背景露出</label>
                     <input type="range" id="exposure" min="0.1" max="4.0" step="0.1" value="1.0">
                 </div>
             </div>
-            <div id="status">背景タップでUIトグル。YouTube読み込み後に同時再生を押してください。</div>
+            <div id="status">背景タップでUI表示。YouTube読込後に同時再生を押してください。</div>
             <label class="file-label" for="file-input" style="align-self: center;">📸 背景 .exr 画像を選択</label>
             <input type="file" id="file-input" accept=".exr">
         </div>
@@ -297,7 +297,6 @@
 
     <div id="canvas-container"></div>
 
-    <!-- YouTube Iframe API Script -->
     <script src="https://www.youtube.com/iframe_api"></script>
 
     <script type="module">
@@ -316,11 +315,10 @@
         let screenOrientation = 0;
         let isGyroEnabled = false;
         
-        // パラメータ
         let ipd = 1.0; 
         let ytDistance = 35;
         let ytScaleFactor = 1.5;
-        const baseYTScale = 0.02; // 640x360ピクセルのiframeをThree.js空間サイズに落とし込むベース値
+        const baseYTScale = 0.02; 
         let uiTimeout;
 
         const overlay = document.getElementById('overlay');
@@ -331,7 +329,6 @@
         const statusText = document.getElementById('status');
         const container = document.getElementById('canvas-container');
         
-        // UI要素
         const exposureInput = document.getElementById('exposure');
         const ipdInput = document.getElementById('ipd');
         const ytDistInput = document.getElementById('yt-dist');
@@ -343,7 +340,6 @@
         const ytRecenterBtn = document.getElementById('yt-recenter-btn');
 
         function initThree() {
-            // --- 1. WebGL（背景用）の設定 ---
             scene = new THREE.Scene();
             cameraRig = new THREE.Group();
             scene.add(cameraRig);
@@ -366,14 +362,12 @@
             renderer.outputColorSpace = THREE.SRGBColorSpace;
             container.appendChild(renderer.domElement);
 
-            // 背景球体
             const geometry = new THREE.SphereGeometry(80, 60, 40);
             geometry.scale(-1, 1, 1);
             sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x1c1c24 });
             sphere = new THREE.Mesh(geometry, sphereMaterial);
             scene.add(sphere);
 
-            // --- 2. CSS3D（YouTube用）の左右独立設定 ---
             sceneCSSLeft = new THREE.Scene();
             sceneCSSRight = new THREE.Scene();
 
@@ -385,13 +379,10 @@
             cssRendererRight.setSize(width / 2, height);
             document.getElementById('css-container-right').appendChild(cssRendererRight.domElement);
 
-            // --- 3. リスナとイベント群 ---
             window.addEventListener('resize', onWindowResize);
             window.addEventListener('orientationchange', () => setTimeout(onWindowResize, 200));
 
             setupUIEventListeners();
-            
-            // 初期のダミーYouTube読み込み
             loadYouTubeVideo();
 
             animate();
@@ -461,7 +452,6 @@
             cameraRight.position.set(offset, 0, 0);
         }
 
-        // YouTubeのURLからVideoIDを抽出
         function extractVideoId(url) {
             const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
             const match = url.match(regExp);
@@ -477,20 +467,17 @@
 
             statusText.textContent = "YouTube動画を初期化中...";
 
-            // 既存のオブジェクトがあればシーンから削除
             if (youtubeLeftObj) sceneCSSLeft.remove(youtubeLeftObj);
             if (youtubeRightObj) sceneCSSRight.remove(youtubeRightObj);
 
             playerLeft = null;
             playerRight = null;
 
-            // 左右のiframeエレメントを作成
             const createIframe = (domId) => {
                 const iframe = document.createElement('iframe');
                 iframe.id = domId;
                 iframe.width = "640";
                 iframe.height = "360";
-                // API有効化、コントロール非表示、インライン再生強制
                 iframe.src = `https://www.youtube.com/embed/${id}?enablejsapi=1&controls=0&rel=0&playsinline=1&origin=${window.location.origin}`;
                 iframe.style.border = "none";
                 iframe.style.backgroundColor = "#000";
@@ -506,10 +493,8 @@
             sceneCSSLeft.add(youtubeLeftObj);
             sceneCSSRight.add(youtubeRightObj);
 
-            // 位置を現在向いている正面にリセット
             recenterYoutubeScreen();
 
-            // YouTube Player APIにバインド (スクリプト読み込み完了を想定)
             if (typeof YT !== 'undefined' && YT.Player) {
                 setTimeout(() => {
                     playerLeft = new YT.Player(elLeft, {
@@ -520,7 +505,6 @@
             }
         }
 
-        // 向きを変えずに「距離」や「サイズ」スライダーだけを変更した際の変形アップデート
         function updateYoutubeTransform() {
             if (!youtubeLeftObj || !youtubeRightObj) return;
 
@@ -528,7 +512,6 @@
             youtubeLeftObj.scale.set(scale, scale, scale);
             youtubeRightObj.scale.set(scale, scale, scale);
 
-            // 現在の配置方向（ベクトル）を維持して距離を再計算
             let dir = youtubeLeftObj.position.clone().normalize();
             if (dir.lengthSq() === 0) dir.set(0, 0, -1);
 
@@ -537,30 +520,23 @@
             youtubeRightObj.position.copy(targetPos);
         }
 
-        // ★ ご要望機能：YouTube画面を「今見てる方向」へ配置する ★
         function recenterYoutubeScreen() {
             if (!youtubeLeftObj || !youtubeRightObj) return;
 
-            // ジャイロによるリグ全体の傾きから、現在の視線ベクトル(Z軸の逆)を算出
             const dir = new THREE.Vector3(0, 0, -1);
             if (cameraRig) {
                 dir.applyQuaternion(cameraRig.quaternion);
             }
             dir.normalize();
 
-            // 指定された距離を乗算して位置を決定
             const targetPos = dir.clone().multiplyScalar(ytDistance);
             youtubeLeftObj.position.copy(targetPos);
             youtubeRightObj.position.copy(targetPos);
 
-            // 画面が中心（カメラ位置）を向くように回転させる
+            // ★ 修正点: lookAtだけでカメラに正対するため、余計な反転(rotation.y += Math.PI)を削除 ★
             youtubeLeftObj.lookAt(0, 0, 0);
             youtubeRightObj.lookAt(0, 0, 0);
-            // CSS3DObjectの表面を内側に向けるためにY軸を180度反転
-            youtubeLeftObj.rotation.y += Math.PI;
-            youtubeRightObj.rotation.y += Math.PI;
 
-            // スケールの再適用
             const scale = baseYTScale * ytScaleFactor;
             youtubeLeftObj.scale.set(scale, scale, scale);
             youtubeRightObj.scale.set(scale, scale, scale);
@@ -609,7 +585,6 @@
             const width = window.innerWidth;
             const height = window.innerHeight;
             
-            // 1. WebGL 背景レンダリング
             renderer.setScissorTest(true);
             
             renderer.setViewport(0, 0, width / 2, height);
@@ -620,12 +595,10 @@
             renderer.setScissor(width / 2, 0, width / 2, height);
             renderer.render(scene, cameraRight);
             
-            // 2. CSS3D YouTube レンダリング（左右独立）
             cssRendererLeft.render(sceneCSSLeft, cameraLeft);
             cssRendererRight.render(sceneCSSRight, cameraRight);
         }
 
-        // 背景EXR読み込み
         fileInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -657,7 +630,6 @@
             });
         });
 
-        // UI自動開閉制御
         function hideUI() {
             uiPanel.style.opacity = '0';
             uiPanel.style.pointerEvents = 'none';
@@ -671,7 +643,7 @@
 
         function resetUITimer() {
             clearTimeout(uiTimeout);
-            uiTimeout = setTimeout(hideUI, 5000); // 各種微調整がしやすいよう5秒に変更
+            uiTimeout = setTimeout(hideUI, 5000); 
         }
 
         function updateScreenOrientation() {
