@@ -18,7 +18,6 @@
         }
         #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
         
-        /* YouTube画面の操作（クリック等）を有効化するため pointer-events: auto に変更 */
         #css-container-left, #css-container-right {
             position: absolute; top: 0; width: 50vw; height: 100vh; overflow: hidden; pointer-events: auto; z-index: 2;
         }
@@ -70,9 +69,18 @@
         #vid-recenter-btn { background: #ff9500; }
         
         .sliders-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; width: 100%; }
-        .slider-item { display: flex; align-items: center; justify-content: space-between; font-size: 11px; }
-        .slider-item label { width: 50px; color: #ccc; }
-        .slider-item input { flex: 1; accent-color: #007aff; margin: 0; }
+        .slider-item { display: flex; align-items: center; justify-content: space-between; font-size: 11px; gap: 4px; }
+        .slider-item label { width: 50px; color: #ccc; shrink: 0; }
+        .slider-item input[type="range"] { flex: 1; accent-color: #007aff; margin: 0; min-width: 0; }
+        
+        /* ★ 追加: 数値入力ボックス用のスタイル */
+        .num-input {
+            width: 38px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white; border-radius: 4px; font-size: 11px; text-align: center; padding: 2px 0;
+            font-family: monospace;
+        }
+        .num-input:focus { border-color: #007aff; outline: none; }
+
         #status { color: rgba(255, 255, 255, 0.8); font-size: 11px; text-align: center; min-height: 14px; }
     </style>
     
@@ -94,7 +102,6 @@
     </div>
 
     <div id="center-line"></div>
-    <!-- 3D空間の背後に隠れないよう、UIコンテナより奥・Canvasより手前に配置 -->
     <div id="css-container-left"></div>
     <div id="css-container-right"></div>
 
@@ -115,7 +122,14 @@
             <div class="sliders-grid">
                 <div class="slider-item"><label>画面距離</label><input type="range" id="yt-dist" min="10" max="100" value="35"></div>
                 <div class="slider-item"><label>画面サイズ</label><input type="range" id="yt-size" min="0.2" max="4.0" step="0.1" value="1.5"></div>
-                <div class="slider-item"><label>目間隔</label><input type="range" id="ipd" min="0" max="16" step="0.1" value="1.0"></div>
+                
+                <!-- ★ 変更点: 目間隔の横に入力ボックスを追加 -->
+                <div class="slider-item">
+                    <label>目間隔</label>
+                    <input type="range" id="ipd" min="0" max="16" step="0.1" value="1.0">
+                    <input type="number" id="ipd-num" min="0" max="16" step="0.1" value="1.0" class="num-input">
+                </div>
+                
                 <div class="slider-item"><label>背景露出</label><input type="range" id="exposure" min="0.1" max="4.0" step="0.1" value="1.0"></div>
             </div>
 
@@ -174,6 +188,7 @@
         
         const exposureInput = document.getElementById('exposure');
         const ipdInput = document.getElementById('ipd');
+        const ipdNumInput = document.getElementById('ipd-num'); // ★ 追加
         const ytDistInput = document.getElementById('yt-dist');
         const ytSizeInput = document.getElementById('yt-size');
         const ytUrlInput = document.getElementById('yt-url');
@@ -232,9 +247,31 @@
 
         function setupUIEventListeners() {
             exposureInput.addEventListener('input', (e) => { renderer.toneMappingExposure = parseFloat(e.target.value); resetUITimer(); });
-            ipdInput.addEventListener('input', (e) => { ipd = parseFloat(e.target.value); updateCameraPositions(); resetUITimer(); });
             ytDistInput.addEventListener('input', (e) => { ytDistance = parseFloat(e.target.value); updateScreensTransform(); resetUITimer(); });
             ytSizeInput.addEventListener('input', (e) => { ytScaleFactor = parseFloat(e.target.value); updateScreensTransform(); resetUITimer(); });
+
+            // ★ 変更点: 目間隔スライダー操作時に数値入力も連動させる
+            ipdInput.addEventListener('input', (e) => {
+                ipd = parseFloat(e.target.value);
+                ipdNumInput.value = ipd.toFixed(1);
+                updateCameraPositions();
+                resetUITimer();
+            });
+
+            // ★ 変更点: 数値入力ボックス直接変更時の連動とバリデーション
+            ipdNumInput.addEventListener('input', (e) => {
+                let val = parseFloat(e.target.value);
+                if (isNaN(val)) return;
+                
+                // min/maxを超えないようクリップ
+                if (val < 0) val = 0;
+                if (val > 16) val = 16;
+                
+                ipd = val;
+                ipdInput.value = val;
+                updateCameraPositions();
+                resetUITimer();
+            });
 
             ytLoadBtn.addEventListener('click', () => {
                 isLocalVideoMode = false;
@@ -289,9 +326,6 @@
             });
 
             vidRecenterBtn.addEventListener('click', () => { recenterScreens(); resetUITimer(); });
-            
-            // CanvasコンテナのクリックイベントからUIトグルを外し、干渉を防ぐ（操作系をクリアにするため）
-            // UIパネルの外側をクリックした際のタイマー延長などはキープ
             uiPanel.addEventListener('click', (e) => { e.stopPropagation(); resetUITimer(); });
 
             videoInput.addEventListener('change', function(e) {
@@ -357,7 +391,6 @@
             if (screenLeftObj) sceneCSSLeft.remove(screenLeftObj);
             if (screenRightObj) sceneCSSRight.remove(screenRightObj);
 
-            // ★ 変更点: cc_load_policy=0（字幕オフ指定）と controls=1（標準のUIを表示）を設定
             const createIframe = (domId) => {
                 const iframe = document.createElement('iframe');
                 iframe.id = domId; iframe.width = "640"; iframe.height = "360";
@@ -495,7 +528,6 @@
 
         function hideUI() { uiPanel.style.opacity = '0'; uiPanel.style.pointerEvents = 'none'; }
         function showUI() { uiPanel.style.opacity = '1'; uiPanel.style.pointerEvents = 'auto'; resetUITimer(); }
-        // ★ 変更点: YouTube側のコントロールバーをマウスやタップで操作しやすくするため、UIパネルの自動フェードアウト時間を少し長め（8秒）に設定
         function resetUITimer() { clearTimeout(uiTimeout); uiTimeout = setTimeout(hideUI, 8000); }
 
         startBtn.addEventListener('click', async () => {
