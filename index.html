@@ -17,11 +17,14 @@
             -webkit-user-select: none; user-select: none;
         }
         #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        /* YouTube画面の操作（クリック等）を有効化するため pointer-events: auto に変更 */
         #css-container-left, #css-container-right {
-            position: absolute; top: 0; width: 50vw; height: 100vh; overflow: hidden; pointer-events: none; z-index: 2;
+            position: absolute; top: 0; width: 50vw; height: 100vh; overflow: hidden; pointer-events: auto; z-index: 2;
         }
         #css-container-left { left: 0; }
         #css-container-right { right: 0; }
+        
         #center-line {
             position: absolute; top: 0; left: 50%; width: 1px; height: 100%;
             background: rgba(255, 255, 255, 0.2); z-index: 5; pointer-events: none; display: none;
@@ -58,11 +61,14 @@
             color: white; padding: 6px 10px; border-radius: 8px; font-size: 12px;
         }
         #yt-load-btn { background: #34c759; color: white; border: none; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: bold; }
-        .btn-row { display: flex; gap: 6px; width: 100%; }
-        .btn-row button { flex: 1; color: white; border: none; padding: 8px 4px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer; }
+        
+        .btn-row { display: flex; gap: 6px; width: 100%; flex-wrap: wrap; }
+        .btn-row button { flex: 1; min-width: 80px; color: white; border: none; padding: 8px 4px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer; }
         #vid-play-btn { background: #007aff; }
         #vid-pause-btn { background: #ff3b30; }
+        #vid-sync-slower-btn { background: #5856d6; }
         #vid-recenter-btn { background: #ff9500; }
+        
         .sliders-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; width: 100%; }
         .slider-item { display: flex; align-items: center; justify-content: space-between; font-size: 11px; }
         .slider-item label { width: 50px; color: #ccc; }
@@ -88,25 +94,24 @@
     </div>
 
     <div id="center-line"></div>
+    <!-- 3D空間の背後に隠れないよう、UIコンテナより奥・Canvasより手前に配置 -->
     <div id="css-container-left"></div>
     <div id="css-container-right"></div>
 
     <div id="ui-panel" style="display: none; opacity: 0;">
         <div class="control-box">
-            <!-- YouTube URL入力 -->
             <div class="url-row">
                 <input type="text" id="yt-url" placeholder="YouTube動画のURL" value="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
                 <button id="yt-load-btn">YouTube読込</button>
             </div>
             
-            <!-- 再生・停止コントロール -->
             <div class="btn-row">
                 <button id="vid-play-btn">▶ 同時再生</button>
                 <button id="vid-pause-btn">❚❚ 同時停止</button>
-                <button id="vid-recenter-btn">🎯 正面に配置</button>
+                <button id="vid-sync-slower-btn">⏳ 遅い方に同期</button>
+                <button id="vid-recenter-btn">🎯 正面配置</button>
             </div>
             
-            <!-- スライダー群 -->
             <div class="sliders-grid">
                 <div class="slider-item"><label>画面距離</label><input type="range" id="yt-dist" min="10" max="100" value="35"></div>
                 <div class="slider-item"><label>画面サイズ</label><input type="range" id="yt-size" min="0.2" max="4.0" step="0.1" value="1.5"></div>
@@ -116,9 +121,8 @@
 
             <div id="status">動画ファイルを読み込むと、スマホでも確実に100%同期再生できます。</div>
             
-            <!-- ファイル選択行 -->
             <div class="file-inputs-row">
-                <label class="file-label" for="video-input">🎞️ 動画ファイル(.mp4等)を選択</label>
+                <label class="file-label" for="video-input">🎞️ 動画ファイルを選択</label>
                 <input type="file" id="video-input" accept="video/*">
                 
                 <label class="file-label" for="file-input">📸 背景 .exr 選択</label>
@@ -129,7 +133,6 @@
 
     <div id="canvas-container"></div>
 
-    <!-- 背景で再生転送する用のHidden Videoタグ -->
     <video id="local-video" loop playsinline webkit-playsinline crossOrigin="anonymous" style="display:none;"></video>
 
     <script src="https://www.youtube.com/iframe_api"></script>
@@ -143,9 +146,8 @@
         let cameraRig, cameraLeft, cameraRight;
         let cssRendererLeft, cssRendererRight;
         let sceneCSSLeft, sceneCSSRight;
-        let screenLeftObj, screenRightObj; // YouTube(CSS3D) または ローカルビデオ(Mesh) が入る
+        let screenLeftObj, screenRightObj; 
         
-        // ローカルビデオテクスチャ用
         let videoElement, videoTexture, videoMeshLeft, videoMeshRight;
         let isLocalVideoMode = false;
 
@@ -178,6 +180,7 @@
         const ytLoadBtn = document.getElementById('yt-load-btn');
         const vidPlayBtn = document.getElementById('vid-play-btn');
         const vidPauseBtn = document.getElementById('vid-pause-btn');
+        const vidSyncSlowerBtn = document.getElementById('vid-sync-slower-btn');
         const vidRecenterBtn = document.getElementById('vid-recenter-btn');
 
         function initThree() {
@@ -223,7 +226,6 @@
             window.addEventListener('resize', onWindowResize);
             setupUIEventListeners();
             
-            // 初期状態ではデフォルトのYouTubeを読み込み
             loadYouTubeVideo();
             animate();
         }
@@ -247,13 +249,12 @@
                     videoElement.play().catch(err => console.log(err));
                     statusText.textContent = "ローカル動画を同期再生中...";
                 } else {
-                    // YouTube制限対策：右側を強制ミュートにして競合を防ぐ試み
                     if (playerRight && playerRight.mute) playerRight.mute(); 
                     if (playerLeft && playerLeft.playVideo) playerLeft.playVideo();
                     setTimeout(() => {
                         if (playerRight && playerRight.playVideo) playerRight.playVideo();
                     }, 150);
-                    statusText.textContent = "YouTubeを再生（スマホの場合、競合により片方が止まることがあります）";
+                    statusText.textContent = "YouTubeを再生開始";
                 }
                 resetUITimer();
             });
@@ -269,11 +270,30 @@
                 resetUITimer();
             });
 
+            vidSyncSlowerBtn.addEventListener('click', () => {
+                if (isLocalVideoMode) {
+                    statusText.textContent = "ローカル動画は完全に同期しています。";
+                } else {
+                    if (playerLeft && playerRight && typeof playerLeft.getCurrentTime === 'function' && typeof playerRight.getCurrentTime === 'function') {
+                        const tLeft = playerLeft.getCurrentTime();
+                        const tRight = playerRight.getCurrentTime();
+                        const slowerTime = Math.min(tLeft, tRight);
+                        playerLeft.seekTo(slowerTime, true);
+                        playerRight.seekTo(slowerTime, true);
+                        statusText.textContent = `遅い方の時間 (${slowerTime.toFixed(2)}秒) に合わせました。`;
+                    } else {
+                        statusText.textContent = "プレイヤーが準備できていません。";
+                    }
+                }
+                resetUITimer();
+            });
+
             vidRecenterBtn.addEventListener('click', () => { recenterScreens(); resetUITimer(); });
-            container.addEventListener('click', () => { if (uiPanel.style.opacity === '0') showUI(); else hideUI(); });
+            
+            // CanvasコンテナのクリックイベントからUIトグルを外し、干渉を防ぐ（操作系をクリアにするため）
+            // UIパネルの外側をクリックした際のタイマー延長などはキープ
             uiPanel.addEventListener('click', (e) => { e.stopPropagation(); resetUITimer(); });
 
-            // 動画ファイルが選択された時の処理
             videoInput.addEventListener('change', function(e) {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -281,7 +301,6 @@
                 isLocalVideoMode = true;
                 statusText.textContent = "動画ファイルを読み込み中...";
 
-                // YouTubeを破棄
                 if (screenLeftObj) sceneCSSLeft.remove(screenLeftObj);
                 if (screenRightObj) sceneCSSRight.remove(screenRightObj);
                 playerLeft = null; playerRight = null;
@@ -290,13 +309,11 @@
                 videoElement.src = fileURL;
                 videoElement.load();
 
-                // ビデオテクスチャの構築
                 videoTexture = new THREE.VideoTexture(videoElement);
                 videoTexture.minFilter = THREE.LinearFilter;
                 videoTexture.magFilter = THREE.LinearFilter;
                 videoTexture.colorSpace = THREE.SRGBColorSpace;
 
-                // 16:9 の平面スクリーンを左右に作成
                 const movieGeo = new THREE.PlaneGeometry(16, 9);
                 const movieMat = new THREE.MeshBasicMaterial({ map: videoTexture, side: THREE.DoubleSide });
 
@@ -304,7 +321,6 @@
                 videoMeshLeft = new THREE.Mesh(movieGeo, movieMat);
                 videoMeshRight = new THREE.Mesh(movieGeo, movieMat);
 
-                // レンダリング時のレイヤー分け（左目＝レイヤー1、右目＝レイヤー2）
                 videoMeshLeft.layers.set(1);
                 videoMeshRight.layers.set(2);
 
@@ -312,7 +328,7 @@
                 scene.add(videoMeshRight);
 
                 recenterScreens();
-                statusText.textContent = "動画ファイルの読み込み完了！100%同期再生が可能です。";
+                statusText.textContent = "動画ファイルを読み込みました。";
             });
         }
 
@@ -321,11 +337,10 @@
             cameraLeft.position.set(-offset, 0, 0);
             cameraRight.position.set(offset, 0, 0);
             
-            // レイヤー割り当て
-            cameraLeft.layers.enable(0);  // 背景用
-            cameraLeft.layers.enable(1);  // 左目専用オブジェクト用
-            cameraRight.layers.enable(0); // 背景用
-            cameraRight.layers.enable(2); // 右目専用オブジェクト用
+            cameraLeft.layers.enable(0);  
+            cameraLeft.layers.enable(1);  
+            cameraRight.layers.enable(0); 
+            cameraRight.layers.enable(2); 
         }
 
         function extractVideoId(url) {
@@ -342,10 +357,11 @@
             if (screenLeftObj) sceneCSSLeft.remove(screenLeftObj);
             if (screenRightObj) sceneCSSRight.remove(screenRightObj);
 
+            // ★ 変更点: cc_load_policy=0（字幕オフ指定）と controls=1（標準のUIを表示）を設定
             const createIframe = (domId) => {
                 const iframe = document.createElement('iframe');
                 iframe.id = domId; iframe.width = "640"; iframe.height = "360";
-                iframe.src = `https://www.youtube.com/embed/${id}?enablejsapi=1&controls=0&rel=0&playsinline=1&origin=${window.location.origin}`;
+                iframe.src = `https://www.youtube.com/embed/${id}?enablejsapi=1&controls=1&cc_load_policy=0&rel=0&playsinline=1&origin=${window.location.origin}`;
                 iframe.style.border = "none"; iframe.style.backgroundColor = "#000";
                 return iframe;
             };
@@ -364,7 +380,7 @@
             if (typeof YT !== 'undefined' && YT.Player) {
                 setTimeout(() => {
                     playerLeft = new YT.Player(elLeft, {
-                        events: { 'onReady': () => { statusText.textContent = "YouTube準備完了。スマホで止まる場合は動画ファイルをお試しください。"; } }
+                        events: { 'onReady': () => { statusText.textContent = "YouTube準備完了（標準UI・字幕初期オフ）"; } }
                     });
                     playerRight = new YT.Player(elRight);
                 }, 500);
@@ -449,20 +465,17 @@
             const height = window.innerHeight;
             renderer.setScissorTest(true);
             
-            // 左目描画
             renderer.setViewport(0, 0, width / 2, height);
             renderer.setScissor(0, 0, width / 2, height);
             renderer.render(scene, cameraLeft);
             if (!isLocalVideoMode) cssRendererLeft.render(sceneCSSLeft, cameraLeft);
             
-            // 右目描画
             renderer.setViewport(width / 2, 0, width / 2, height);
             renderer.setScissor(width / 2, 0, width / 2, height);
             renderer.render(scene, cameraRight);
             if (!isLocalVideoMode) cssRendererRight.render(sceneCSSRight, cameraRight);
         }
 
-        // EXR背景読み込み
         fileInput.addEventListener('change', function(e) {
             const file = e.target.files[0]; if (!file) return;
             statusText.textContent = 'EXRデコード中...'; resetUITimer();
@@ -482,7 +495,8 @@
 
         function hideUI() { uiPanel.style.opacity = '0'; uiPanel.style.pointerEvents = 'none'; }
         function showUI() { uiPanel.style.opacity = '1'; uiPanel.style.pointerEvents = 'auto'; resetUITimer(); }
-        function resetUITimer() { clearTimeout(uiTimeout); uiTimeout = setTimeout(hideUI, 5000); }
+        // ★ 変更点: YouTube側のコントロールバーをマウスやタップで操作しやすくするため、UIパネルの自動フェードアウト時間を少し長め（8秒）に設定
+        function resetUITimer() { clearTimeout(uiTimeout); uiTimeout = setTimeout(hideUI, 8000); }
 
         startBtn.addEventListener('click', async () => {
             initThree();
